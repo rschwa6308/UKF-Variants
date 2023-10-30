@@ -1,6 +1,8 @@
-# 16-833-SLAM-Project
+# 16-833 SLAM Final Project: Unscented Kalman Filter Variants
 
 Russell Schwartz and Ian Krause
+
+Overleaf: https://www.overleaf.com/project/65368bca0723746d02e80c05
 
 ## Deadlines
  - Project Proposal: Oct 24
