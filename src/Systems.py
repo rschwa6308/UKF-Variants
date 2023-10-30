@@ -1,5 +1,9 @@
 import numpy as np
 
+from torch.autograd.functional import jacobian
+from torch import tensor
+
+
 
 class SystemModel:
     def __init__(self, state_dim, control_dim, measurement_dim):
@@ -45,8 +49,32 @@ class LinearSystemModel(SystemModel):
 
 
 class DifferentiableSystemModel(SystemModel):
-    def dynamics_jacobian(x):
-        pass    # TODO
+    def __init__(self):
+        super().__init__(3, 3, 3) # Assuming placeholder dimension values until reasoned from f and h
+
+    def f(x1,x2):
+        return (x2**2,x1**2)
+    
+    def h(x1,x2):
+        return (x2**3,x1**3)
+    
+    def dynamics_jacobian(self,x: np.array, u:np.array):
+        futureTuple = []
+        for i in range(0,x.size):
+            futureTuple.append(tensor(float(x[i])))
+
+        myNewTuple = tuple(futureTuple)
+        #return jacobian(self.f,myNewTuple)
+        return self.jacobian_to_np_array(jacobian(self.f,myNewTuple))    # TODO
 
     def measurement_jacobian(x):
         pass    # TODO
+
+    def jacobian_to_np_array(self,jacobian):
+        array = np.zeros((self.state_dim,self.state_dim))
+
+        for i in range(0,self.state_dim**2):
+            local_tuple = jacobian[i%3]
+            array[i//3,i%3] = float(local_tuple[i//3])
+
+        return array
