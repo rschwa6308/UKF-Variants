@@ -114,4 +114,41 @@ class ExtendedKalmanFilter(Filter):
     
 
 class UnscentedKalmanFilter(Filter):
-    pass    # TODO
+    def __init__(self, system: SystemModel):
+        super().__init__(system)
+    
+    def predict_step(self, u):
+        # select sigma points in accordance with prior
+        sigma_points = []   # TODO
+
+        # pass sigma points through dynamics model
+        sigma_points_transformed = []
+        for point in sigma_points:
+            image = self.system.dynamics_model(point)       # TODO: should this be the noisy model???
+            sigma_points_transformed.append(image)
+        
+        # fit a gaussian to transformed sigma points
+        pass    # TODO
+
+        # Kalman predict step
+        pass    # TODO
+
+    
+    def update_step(self, z):
+        # select sigma points in accordance with prior
+        sigma_points = []   # TODO
+
+        # pass sigma points through measurement model
+        sigma_points_transformed = []
+        for point in sigma_points:
+            image = self.system.measurement_model(point)    # TODO: should this be the noisy model???
+            sigma_points_transformed.append(image)
+
+        # fit a gaussian to transformed sigma points
+        pass    # TODO
+
+        # compute cross-covariance between original sigma points and transformed sigma points
+        pass    # TODO
+
+        # Kalman update step
+        pass    # TODO
