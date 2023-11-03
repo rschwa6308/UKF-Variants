@@ -1,5 +1,8 @@
 import numpy as np
-from Systems import SystemModel, LinearSystemModel, DifferentiableSystemModel
+import scipy.linalg
+
+from Systems import GaussianSystemModel, SystemModel, LinearSystemModel, DifferentiableSystemModel
+from sigma_points import SigmaPointSelector, StandardSigmaPointSelector
 
 
 class Filter:
@@ -63,7 +66,7 @@ class ExtendedKalmanFilter(Filter):
 
     System model is linearized at the current state estimate, and then linear Kalman estimation is applied.
     """
-    def __init__(self, system: DifferentiableSystemModel):
+    def __init__(self, system: DifferentiableSystemModel):  # NOTE: this type hint should be the intersection of DifferentiableSystemModel and GaussianSystemModel, but python doesn't currently support intersection types
         super().__init__(system)
         self.mean = None
         self.covariance = None
@@ -82,11 +85,11 @@ class ExtendedKalmanFilter(Filter):
         """
         # linearize dynamics model
         w_mean = np.zeros((self.system.dynamics_noise_dim, 1))
-        A, B, L = self.system.dynamics_jacobian(self.mean, u, w_mean)
+        A, B, L = self.system.query_dynamics_jacobian(self.mean, u, w_mean)
 
         # Kalman predict step
-        self.mean = self.system.dynamics_model(self.mean, u)
-        self.covariance = A @ self.covariance @ A.T + L @ self.system.R @ L.T
+        self.mean = self.system.query_dynamics_model(self.mean, u)
+        self.covariance = A @ self.covariance @ A.T + L @ self.system.dynamics_noise_cov @ L.T
 
     def update_step(self, z):
         """
@@ -102,53 +105,90 @@ class ExtendedKalmanFilter(Filter):
         """
         # linearize measurement model
         v_mean = np.zeros((self.system.measurement_noise_dim, 1))
-        C, M = self.system.measurement_jacobian(self.mean, v_mean)
+        C, M = self.system.query_measurement_jacobian(self.mean, v_mean)
 
         # compute Kalman gain
-        K = self.covariance @ C.T @ np.linalg.inv(C @ self.covariance @ C.T + M @ self.system.Q @ M.T)
+        K = self.covariance @ C.T @ np.linalg.inv(C @ self.covariance @ C.T + M @ self.system.measurement_noise_cov @ M.T)
 
         # Kalman update state
-        self.mean += K @ (z - self.system.measurement_model(self.mean))
+        self.mean += K @ (z - self.system.query_measurement_model(self.mean))
         self.covariance -= K @ C @ self.covariance
 
     
 
 class UnscentedKalmanFilter(Filter):
-    def __init__(self, system: SystemModel):
+    def __init__(self, system: GaussianSystemModel, sigma_point_selector: SigmaPointSelector = None):
         super().__init__(system)
+
+        self.mean = None
+        self.covariance = None
+
+        if sigma_point_selector is None:
+            sigma_point_selector = StandardSigmaPointSelector()
+
+        self.sigma_point_selector = sigma_point_selector
+
+
+    def initialize(self, mean, covariance):
+        self.mean = mean
+        self.covariance = covariance
+    
     
     def predict_step(self, u):
+        # Note: for non-additive noise models, UKF selects sigma points from an "augmented" state + noise space
+        augmented_mean = np.concatenate([self.mean, np.zeros((self.system.dynamics_noise_dim, 1))])
+        augmented_cov = scipy.linalg.block_diag(self.covariance, self.system.dynamics_noise_cov)
+
         # select sigma points in accordance with prior
-        sigma_points = []   # TODO
+        sigma_points, weights_mean, weights_cov = self.sigma_point_selector.select_sigma_points(augmented_mean, augmented_cov)
 
         # pass sigma points through dynamics model
         sigma_points_transformed = []
-        for point in sigma_points:
-            image = self.system.dynamics_model(point)       # TODO: should this be the noisy model???
-            sigma_points_transformed.append(image)
+        for i in range(sigma_points.shape[1]):
+            point = sigma_points[:,i]
+            x, w = np.split(point, [self.system.state_dim])     # un-augment
+            x_prime = self.system.query_dynamics_model(x, u, w)
+            sigma_points_transformed.append(x_prime)
         
-        # fit a gaussian to transformed sigma points
-        pass    # TODO
+        sigma_points_transformed = np.hstack(sigma_points_transformed)
 
-        # Kalman predict step
-        pass    # TODO
+        # fit a gaussian to weighted transformed sigma points
+        mean_hat = np.sum(weights_mean * sigma_points_transformed, axis=1, keepdims=True)
+        cov_hat = weights_cov * (sigma_points_transformed - mean_hat) @ (sigma_points_transformed - mean_hat).T
+
+        self.mean = mean_hat
+        self.covariance = cov_hat
 
     
     def update_step(self, z):
+        # Note: for non-additive noise models, UKF selects sigma points from an "augmented" state + noise space
+        augmented_mean = np.concatenate([self.mean, np.zeros((self.system.measurement_noise_dim, 1))])
+        augmented_cov = scipy.linalg.block_diag(self.covariance, self.system.measurement_noise_cov)
+
         # select sigma points in accordance with prior
-        sigma_points = []   # TODO
+        sigma_points, weights_mean, weights_cov = self.sigma_point_selector.select_sigma_points(augmented_mean, augmented_cov)
 
         # pass sigma points through measurement model
         sigma_points_transformed = []
-        for point in sigma_points:
-            image = self.system.measurement_model(point)    # TODO: should this be the noisy model???
-            sigma_points_transformed.append(image)
+        for i in range(sigma_points.shape[1]):
+            point = sigma_points[:,i]
+            x, v = np.split(point, [self.system.state_dim])     # un-augment
+            x_prime = self.system.query_measurement_model(x, v)
+            sigma_points_transformed.append(x_prime)
+        
+        sigma_points_transformed = np.hstack(sigma_points_transformed)
+        print(sigma_points_transformed.shape)
 
-        # fit a gaussian to transformed sigma points
-        pass    # TODO
+        # fit a gaussian to weighted transformed sigma points
+        z_hat = np.sum(weights_mean * sigma_points, axis=1, keepdims=True)
 
-        # compute cross-covariance between original sigma points and transformed sigma points
-        pass    # TODO
+        cov_zz = weights_cov * (sigma_points_transformed - z_hat) @ (sigma_points_transformed - z_hat).T
+        cov_xz = weights_cov * (sigma_points[:self.system.state_dim, :] - self.mean) @ (sigma_points_transformed - z_hat).T
+
+        print(cov_zz)       # TODO: debug this
+
+        K = cov_xz @ np.linalg.inv(cov_zz)
 
         # Kalman update step
-        pass    # TODO
+        self.mean += K @ (z - z_hat)
+        self.covariance -= K @ cov_zz @ K.T

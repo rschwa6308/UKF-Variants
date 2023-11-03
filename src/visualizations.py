@@ -118,3 +118,31 @@ def plot_pdf_transform(domain, prior, transform_values, posterior, slice_highlig
     axes[0, 0].set_zorder(1)
     axes[0, 1].set_zorder(0)
     axes[1, 1].set_zorder(1)
+
+import matplotlib.patches
+import matplotlib.transforms
+
+
+def plot_covariance_ellipse(ax, mean, cov, n_std=1.0, **kwargs):
+    pearson = cov[0, 1] / np.sqrt(cov[0, 0] * cov[1, 1])
+
+    # Using a special case to obtain the eigenvalues of this two-dimensional distribution
+    ell_radius_x = np.sqrt(1 + pearson)
+    ell_radius_y = np.sqrt(1 - pearson)
+    ellipse = matplotlib.patches.Ellipse(
+        (0, 0), width=ell_radius_x * 2, height=ell_radius_y * 2,
+        **kwargs
+    )
+
+    mean_x, mean_y = mean.flatten()
+
+    scale_x = np.sqrt(cov[0, 0]) * n_std
+    scale_y = np.sqrt(cov[1, 1]) * n_std
+
+    transf = matplotlib.transforms.Affine2D() \
+        .rotate_deg(45) \
+        .scale(scale_x, scale_y) \
+        .translate(mean_x, mean_y)
+
+    ellipse.set_transform(transf + ax.transData)
+    ax.add_patch(ellipse)

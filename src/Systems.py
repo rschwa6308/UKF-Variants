@@ -8,38 +8,81 @@ import jax
 
 class SystemModel:
     """
-    An abstract class representing a system of interest, including a dynamics model and measurement model.
+    A high-level class representing a dynamic system, including a dynamics model, measurement model, and corresponding noise models.
 
     Constructor requires the dimensions of the following spaces:
-     - x: state space
-     - u: control space
-     - z: measurement space
-     - w: dynamics noise space (optional, defaults to same as state space)
-     - v: measurement noise space (optional, defaults to same as measurement space)
+     - `state_dim`: dimension of the state space (x)
+     - `control_dim`: dimension of the control input space (u)
+     - `measurement_dim`: dimension of the measurement space (z)
+     - `dynamics_noise_dim`: dimension of the dynamics noise vector space (w)
+     - `measurement_noise_dim`: dimension of the measurement noise vector space (v)
+    
+    in addition to four callable functions:
+     - `dynamics_func`: (x, u, w) -> x
+     - `measurement_func`: (x, v) -> z
+     - `dynamics_noise_func`: () -> w
+     - `measurement_noise_func`: () -> v
 
     Subclasses include:
      - `LinearSystemModel`
      - `DifferentiableSystemModel`
     """
-    def __init__(self, state_dim, control_dim, measurement_dim, dynamics_noise_dim=None, measurement_noise_dim=None):
+    def __init__(self,
+        state_dim, control_dim, measurement_dim,
+        dynamics_noise_dim, measurement_noise_dim,
+        dynamics_func, measurement_func,
+        dynamics_noise_func, measurement_noise_func
+    ):
         self.state_dim = state_dim
         self.control_dim = control_dim
         self.measurement_dim = measurement_dim
 
-        if dynamics_noise_dim is None:
-            dynamics_noise_dim = self.state_dim
-        
-        if measurement_noise_dim is None:
-            measurement_noise_dim = self.measurement_dim
-        
         self.dynamics_noise_dim = dynamics_noise_dim
         self.measurement_noise_dim = measurement_noise_dim
 
-    def dynamics_model(self, x: np.array, u: np.array) -> np.array:
-        "Simulate noisy dynamics at state x with control input u"
+        self.dynamics_func = dynamics_func
+        self.measurement_func = measurement_func
 
-    def measurement_model(self, x: np.array) -> np.array:
-        "Simulate noisy measurement at state x"
+        self.dynamics_noise_func = dynamics_noise_func
+        self.measurement_noise_func = measurement_noise_func
+
+    def query_dynamics_model(self, x: np.array, u: np.array, w: np.array = None) -> np.array:
+        "Simulate noisy dynamics at state x with control input u. Noise vector w can be specified explicitly, otherwise it is sampled from self.dynamics_noise_func()"
+        if w is None:
+            w = self.dynamics_noise_func()
+        
+        return self.dynamics_func(x, u, w)
+
+    def query_measurement_model(self, x: np.array, v: np.array = None) -> np.array:
+        "Simulate noisy measurement at state x. Noise vector v can be specified explicitly, otherwise it is sampled from self.measurement_noise_func()"
+        if v is None:
+            v = self.measurement_noise_func()
+        
+        return self.measurement_func(x, v)
+    
+
+
+class GaussianSystemModel(SystemModel):
+    "A system model in which both process noise and observation noise are (potentially non-additive) zero-mean gaussians"
+
+    def __init__(self, state_dim, control_dim, measurement_dim, dynamics_func, measurement_func, dynamics_noise_cov, measurement_noise_cov):
+        self.dynamics_noise_cov = dynamics_noise_cov
+        self.measurement_noise_cov = measurement_noise_cov
+
+        def dynamics_noise_func():
+            w = np.random.multivariate_normal(np.zeros(self.state_dim), dynamics_noise_cov)
+            return w.reshape((-1, 1))
+        
+        def measurement_noise_func():
+            v = np.random.multivariate_normal(np.zeros(self.measurement_dim), measurement_noise_cov)
+            return v.reshape((-1, 1))
+
+        super().__init__(
+            state_dim, control_dim, measurement_dim,
+            dynamics_noise_cov.shape[0], measurement_noise_cov.shape[0],
+            dynamics_func, measurement_func,
+            dynamics_noise_func, measurement_noise_func
+        )
 
 
 class DifferentiableSystemModel(SystemModel):
@@ -53,14 +96,14 @@ class DifferentiableSystemModel(SystemModel):
      - `SymbDiffSystemModel`: jacobians provided explicitly be user
     """
 
-    def dynamics_jacobian(self, x: np.array, u: np.array) -> Tuple[np.array, np.array, np.array]:
+    def query_dynamics_jacobian(self, x: np.array, u: np.array) -> Tuple[np.array, np.array, np.array]:
         "Compute jacobian of dynamics model wrt x, wrt u, and wrt w. Return all three in a tuple."
 
-    def measurement_jacobian(self, x: np.array) -> Tuple[np.array, np.array]:
+    def query_measurement_jacobian(self, x: np.array) -> Tuple[np.array, np.array]:
         "Compute jacobian of measurement model wrt u and wrt v. Return both in a tuple."
 
 
-class LinearSystemModel(DifferentiableSystemModel):
+class LinearSystemModel(GaussianSystemModel, DifferentiableSystemModel):
     """
     A time-invariant system model with linear dynamics, linear measurement model, and additive gaussian noises.
 
@@ -71,27 +114,28 @@ class LinearSystemModel(DifferentiableSystemModel):
     """
 
     def __init__(self, A: np.array, B: np.array, C: np.array, R: np.array, Q: np.array):
-        if R.shape[0] != A.shape[0]:
-            raise ValueError("Dynamics noise covariance matrix must match state dim (as determined by A.shape)!")
-
-        if Q.shape[0] != C.shape[0]:
-            raise ValueError("Measurement noise covariance matrix must match measurement dim (as determined by C.shape)!")
-
-        super().__init__(A.shape[0], B.shape[1], C.shape[0])
-
         self.A = A
         self.B = B
         self.C = C
         self.R = R
         self.Q = Q
+
+        def dynamics_func(x, u, w):
+            return self.A @ x + self.B @ u + w
+        
+        def measurement_func(x, v):
+            return self.C @ x + v
+
+        super().__init__(A.shape[0], B.shape[1], C.shape[0], dynamics_func, measurement_func, R, Q)
+
     
-    def dynamics_model(self, x: np.array, u: np.array) -> np.array:
-        w = np.random.multivariate_normal(np.zeros(self.state_dim), self.R).reshape((-1, 1))
-        return self.A @ x + self.B @ u + w
+    # def dynamics_model(self, x: np.array, u: np.array) -> np.array:
+    #     w = np.random.multivariate_normal(np.zeros(self.state_dim), self.R).reshape((-1, 1))
+    #     return self.A @ x + self.B @ u + w
     
-    def measurement_model(self, x: np.array) -> np.array:
-        v = np.random.multivariate_normal(np.zeros(self.measurement_dim), self.Q).reshape((-1, 1))
-        return self.C @ x + v
+    # def measurement_model(self, x: np.array) -> np.array:
+    #     v = np.random.multivariate_normal(np.zeros(self.measurement_dim), self.Q).reshape((-1, 1))
+    #     return self.C @ x + v
     
     def dynamics_jacobian(self, x: np.array, u: np.array) -> Tuple[np.array, np.array]:
         return (self.A, self.B, self.R)
@@ -100,7 +144,7 @@ class LinearSystemModel(DifferentiableSystemModel):
         return (self.C, self.Q)
 
 
-class AutoDiffSystemModel(DifferentiableSystemModel):
+class AutoDiffSystemModel(GaussianSystemModel, DifferentiableSystemModel):
     """
     A time-invariant system model with arbitrary dynamics, arbitrary measurement model, and potentially
     non-additive gaussian noises (R, Q). The jacobians are computed at runtime via automatic differentiation (using JAX). 
@@ -112,31 +156,25 @@ class AutoDiffSystemModel(DifferentiableSystemModel):
     Moreover, these functions must operate on `jax.numpy` arrays and must use the corresponding methods.
     """
 
-    def __init__(self, state_dim, control_dim, measurement_dim, dynamics_func: Callable, measurement_func: Callable, R: np.array, Q: np.array):
-        super().__init__(state_dim, control_dim, measurement_dim, R.shape[0], Q.shape[0])
-
-        self.dynamics_func = dynamics_func
-        self.measurement_func = measurement_func
-
-        self.R = R
-        self.Q = Q
+    def __init__(self, state_dim, control_dim, measurement_dim, dynamics_func, measurement_func, dynamics_noise_cov, measurement_noise_cov):
+        super().__init__(state_dim, control_dim, measurement_dim, dynamics_func, measurement_func, dynamics_noise_cov, measurement_noise_cov)
 
         self.dynamics_func_dx = jax.jacfwd(self.dynamics_func, argnums=0)       # wrt first arg (x)
         self.dynamics_func_du = jax.jacfwd(self.dynamics_func, argnums=1)       # wrt second arg (u)
         self.dynamics_func_dw = jax.jacfwd(self.dynamics_func, argnums=2)       # wrt second arg (w)
 
-        self.measurement_func_dx = jax.jacfwd(self.measurement_func, argnums=0) # wrt first arg (x)
-        self.measurement_func_dv = jax.jacfwd(self.measurement_func, argnums=1) # wrt second arg (v)
+        self.measurement_func_dx = jax.jacfwd(self.measurement_func, argnums=0)     # wrt first arg (x)
+        self.measurement_func_dv = jax.jacfwd(self.measurement_func, argnums=1)     # wrt second arg (v)
 
-    def dynamics_model(self, x: np.array, u: np.array) -> np.array:
-        w = np.random.multivariate_normal(np.zeros(self.dynamics_noise_dim), self.R).reshape((-1, 1))
-        return self.dynamics_func(x, u, w)
+    # def dynamics_model(self, x: np.array, u: np.array) -> np.array:
+    #     w = np.random.multivariate_normal(np.zeros(self.dynamics_noise_dim), self.R).reshape((-1, 1))
+    #     return self.dynamics_func(x, u, w)
     
-    def measurement_model(self, x: np.array) -> np.array:
-        v = np.random.multivariate_normal(np.zeros(self.measurement_noise_dim), self.Q).reshape((-1, 1))
-        return self.measurement_func(x, v)
+    # def measurement_model(self, x: np.array) -> np.array:
+    #     v = np.random.multivariate_normal(np.zeros(self.measurement_noise_dim), self.Q).reshape((-1, 1))
+    #     return self.measurement_func(x, v)
 
-    def dynamics_jacobian(self, x: np.array, u: np.array, w: np.array) -> Tuple[np.array, np.array]:
+    def query_dynamics_jacobian(self, x: np.array, u: np.array, w: np.array) -> Tuple[np.array, np.array]:
         # evaluate jacobians (JAX requires explicit floats)
         F_x = self.dynamics_func_dx(x.astype(float), u.astype(float), w.astype(float))
         F_u = self.dynamics_func_du(x.astype(float), u.astype(float), w.astype(float))
@@ -149,7 +187,7 @@ class AutoDiffSystemModel(DifferentiableSystemModel):
 
         return (F_x, F_u, F_w)
 
-    def measurement_jacobian(self, x: np.array, v: np.array) -> np.array:
+    def query_measurement_jacobian(self, x: np.array, v: np.array) -> np.array:
         # evaluate jacobian (JAX requires explicit floats)
         H_x = self.measurement_func_dx(x.astype(float), v.astype(float))
         H_v = self.measurement_func_dv(x.astype(float), v.astype(float))
