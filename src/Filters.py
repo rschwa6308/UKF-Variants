@@ -145,7 +145,7 @@ class UnscentedKalmanFilter(Filter):
         # pass sigma points through dynamics model
         sigma_points_transformed = []
         for i in range(sigma_points.shape[1]):
-            point = sigma_points[:,i]
+            point = sigma_points[:,[i]]
             x, w = np.split(point, [self.system.state_dim])     # un-augment
             x_prime = self.system.query_dynamics_model(x, u, w)
             sigma_points_transformed.append(x_prime)
@@ -159,7 +159,7 @@ class UnscentedKalmanFilter(Filter):
         self.mean = mean_hat
         self.covariance = cov_hat
 
-    
+     
     def update_step(self, z):
         # Note: for non-additive noise models, UKF selects sigma points from an "augmented" state + noise space
         augmented_mean = np.concatenate([self.mean, np.zeros((self.system.measurement_noise_dim, 1))])
@@ -171,24 +171,20 @@ class UnscentedKalmanFilter(Filter):
         # pass sigma points through measurement model
         sigma_points_transformed = []
         for i in range(sigma_points.shape[1]):
-            point = sigma_points[:,i]
+            point = sigma_points[:,[i]]
             x, v = np.split(point, [self.system.state_dim])     # un-augment
             x_prime = self.system.query_measurement_model(x, v)
             sigma_points_transformed.append(x_prime)
-        
+
         sigma_points_transformed = np.hstack(sigma_points_transformed)
-        print(sigma_points_transformed.shape)
 
         # fit a gaussian to weighted transformed sigma points
-        z_hat = np.sum(weights_mean * sigma_points, axis=1, keepdims=True)
+        z_hat = np.sum(weights_mean * sigma_points_transformed, axis=1, keepdims=True)
 
-        cov_zz = weights_cov * (sigma_points_transformed - z_hat) @ (sigma_points_transformed - z_hat).T
+        cov_zz = (weights_cov * (sigma_points_transformed - z_hat)) @ (sigma_points_transformed - z_hat).T
         cov_xz = weights_cov * (sigma_points[:self.system.state_dim, :] - self.mean) @ (sigma_points_transformed - z_hat).T
 
-        print(cov_zz)       # TODO: debug this
-
-        K = cov_xz @ np.linalg.inv(cov_zz)
-
         # Kalman update step
+        K = cov_xz @ np.linalg.inv(cov_zz)
         self.mean += K @ (z - z_hat)
         self.covariance -= K @ cov_zz @ K.T
