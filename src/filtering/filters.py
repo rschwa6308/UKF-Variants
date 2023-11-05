@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.linalg
 
-from Systems import GaussianSystemModel, SystemModel, LinearSystemModel, DifferentiableSystemModel
+from systems import GaussianSystemModel, SystemModel, LinearSystemModel, DifferentiableSystemModel
 from sigma_points import SigmaPointSelector, StandardSigmaPointSelector
 
 

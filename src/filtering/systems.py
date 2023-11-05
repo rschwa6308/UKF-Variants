@@ -31,7 +31,8 @@ class SystemModel:
         state_dim, control_dim, measurement_dim,
         dynamics_noise_dim, measurement_noise_dim,
         dynamics_func, measurement_func,
-        dynamics_noise_func, measurement_noise_func
+        dynamics_noise_func, measurement_noise_func,
+        delta_t=None
     ):
         self.state_dim = state_dim
         self.control_dim = control_dim
@@ -45,6 +46,8 @@ class SystemModel:
 
         self.dynamics_noise_func = dynamics_noise_func
         self.measurement_noise_func = measurement_noise_func
+
+        self.delta_t = delta_t
 
     def query_dynamics_model(self, x: np.array, u: np.array, w: np.array = None) -> np.array:
         "Simulate noisy dynamics at state x with control input u. Noise vector w can be specified explicitly, otherwise it is sampled from self.dynamics_noise_func()"
