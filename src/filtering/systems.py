@@ -73,11 +73,11 @@ class GaussianSystemModel(SystemModel):
         self.measurement_noise_cov = measurement_noise_cov
 
         def dynamics_noise_func():
-            w = np.random.multivariate_normal(np.zeros(self.state_dim), dynamics_noise_cov)
+            w = np.random.multivariate_normal(np.zeros(self.dynamics_noise_dim), dynamics_noise_cov)
             return w.reshape((-1, 1))
         
         def measurement_noise_func():
-            v = np.random.multivariate_normal(np.zeros(self.measurement_dim), measurement_noise_cov)
+            v = np.random.multivariate_normal(np.zeros(self.measurement_noise_dim), measurement_noise_cov)
             return v.reshape((-1, 1))
 
         super().__init__(
