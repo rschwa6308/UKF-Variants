@@ -131,19 +131,40 @@ class EKF_Logger(Logger):
         self.file = open(self.logFilePath,'w')
 
     def initial_write(self,T,ground_truth):
-        self.file.write(str(T) + ' ' + '\n')
-        myString = ''
+        self.file.write(str(T) + ' ')
+        landmarkString = ''
+        xString = ''
+        yString = ''
         gt_vec = ground_truth[0,:,0]
         
         for i in range(0,self.x_dim):
-            myString += str(float(gt_vec[i]))
+            landmarkString += str(float(gt_vec[i]))
 
             if i is not self.x_dim - 1:
-                myString += ' '
+                landmarkString += ' '
             else:
-                myString += '\n'
+                landmarkString += '\n'
 
-        self.file.write(myString)
+        self.file.write(landmarkString)
+
+        gt_vec_x = ground_truth[:,0,0]
+        gt_vec_y = ground_truth[:,1,0]
+
+        for i in range(0,int(T)):
+            xString += str(float(gt_vec_x[i]))
+            yString += str(float(gt_vec_y[i]))
+
+            if i is not self.x_dim - 1:
+                xString += ' '
+                yString += ' '
+            else:
+                xString += '\n'
+                yString += '\n'
+
+        self.file.write(xString)
+        self.file.write(yString)
+
+
 
     def iteration_write(self,u,z,x,cov,t):
         self.write_u(u,t)
@@ -229,19 +250,38 @@ class UKF_Logger(Logger):
         self.file = open(self.logFilePath,'w')
 
     def initial_write(self,T,ground_truth):
-        self.file.write(str(T) + ' ' + '\n')
-        myString = ''
+        self.file.write(str(T) + ' ')
+        landmarkString = ''
+        xString = ''
+        yString = ''
         gt_vec = ground_truth[0,:,0]
         
         for i in range(0,self.x_dim):
-            myString += str(float(gt_vec[i]))
+            landmarkString += str(float(gt_vec[i]))
 
             if i is not self.x_dim - 1:
-                myString += ' '
+                landmarkString += ' '
             else:
-                myString += '\n'
+                landmarkString += '\n'
 
-        self.file.write(myString)
+        self.file.write(landmarkString)
+
+        gt_vec_x = ground_truth[:,0,0]
+        gt_vec_y = ground_truth[:,1,0]
+
+        for i in range(0,int(T)):
+            xString += str(float(gt_vec_x[i]))
+            yString += str(float(gt_vec_y[i]))
+
+            if i is not self.x_dim - 1:
+                xString += ' '
+                yString += ' '
+            else:
+                xString += '\n'
+                yString += '\n'
+
+        self.file.write(xString)
+        self.file.write(yString)
 
     def iteration_write(self,u,z,x,cov,t):
         self.write_u(u,t)
