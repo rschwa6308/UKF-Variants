@@ -147,7 +147,7 @@ def generate_SLAM_system(num_landmarks, dt=0.1):
         # bearings
         bearing_noises = v[::2,0]
         bearings = jnp.arctan2(dy, dx) - theta + bearing_noises
-        bearings = wrap2pi(bearings)
+        bearings = wrap2pi(bearings)    # wrap to [-pi, pi] so residuals are correct
 
         # ranges
         range_noises = v[1::2,0]
@@ -174,3 +174,197 @@ def generate_SLAM_system(num_landmarks, dt=0.1):
     SLAM_nonlinear.delta_t = dt
 
     return SLAM_nonlinear
+
+
+
+########################### Double Inverted Pendulum on a Cart ###########################
+#                                                                                        #
+#    - state:   [cart, cart_vel, theta_1, theta_1_vel, theta_2, theta_2_vel]    #                  
+#    - control: [cart_accel]                                                             #
+#    - dynamics: f(x, u) = lagrangian mechanics (with gravity) + noises                           #
+#    - measurement: h(x) = [cart, theta_1, theta_2] + noises                             #                              
+#                                                                                        #
+#    See: http://pe.org.pl/articles/2021/5/20.pdf                                        #
+#                                                                                        #
+##########################################################################################
+
+# dt = 0.001                      # timestep
+# M, m1, m2 = 1.5, 0.5, 0.75      # masses
+# L1, L2 = 0.5, 0.75              # lengths
+# g = 9.81                        # gravity
+
+# def dynamics_func(x, u, w):
+#     cart, cart_vel, theta_1, theta_1_vel, theta_2, theta_2_vel = x.flatten()
+
+#     a11 = M + m1 + m2
+#     a12 = (m1 + 2*m2) * L1 * jnp.cos(theta_1)
+#     a13 = m2 * L2 * jnp.cos(theta_2)
+#     a22 = 4 * (m1/3 + m2) * L1**2
+#     a23 = 2 * m2 * L1 * L2 * jnp.cos(theta_2 - theta_1)
+#     a33 = 4 * m2 * L2**2/3
+
+#     b1 = u[0,0] + (m1*L1 + 2*m2*L1)*theta_1_vel**2*jnp.sin(theta_1) + m2*L2*theta_2_vel**2*jnp.sin(theta_2)
+#     b2 = (m1 + 2*m2)*g*L1*jnp.sin(theta_1) - 2*m2*L1*L2*theta_2_vel**2*jnp.sin(theta_2 - theta_1)
+#     b3 = m2*L2*g*jnp.sin(theta_2) + 2*m2*L1*L2*theta_1_vel**2*jnp.sin(theta_2 - theta_1)
+#     print("b1:\n", b1)
+
+#     alpha = (a13*a12*a12 - a13*a11*a22 - a12*a12 + a11*a23*a12) * b1
+#     # beta = (a11*a13*a12 - a23*a11*a11) * b2  # sus
+#     beta = (a11*a13*a12 - a23*a11*a33) * b2  #  DEBUG
+#     gamma = (a11*a13 - a13*a13) * (a11*a22 - a12*a12) + (a12*a13 - a11*a23) * (a23*a11 - a12*a13)
+#     print("alpha:\n", alpha)
+#     print("beta:\n", beta)
+#     print("gamma:\n", gamma)
+
+#     theta_2_accel = (alpha*b1 - beta*b2 + a11*(a11*a22 - a12*a12)*b3) / gamma
+#     theta_1_accel = ((a13*a12 - a11*a23)*theta_2_accel - a12*b1 + a11*b2) / (a11*a22 - a12*a12)
+
+#     dx_dt = jnp.vstack([
+#         cart_vel,
+#         -(a12 / a11 * theta_1_accel) - (a13 / a11 * theta_2_accel) + (b1 / a11),
+#         theta_1_vel,
+#         theta_1_accel,
+#         theta_2_vel,
+#         theta_2_accel
+#     ])
+
+#     return x + dx_dt*dt + w
+
+
+# def measurement_func(x, v):
+#     return x[[0, 2, 4],:] + v
+
+
+# # dynamics noise covariance
+# R = jnp.diag(jnp.array([
+#     0.001,      # cart
+#     0.001,      # cart_vel
+#     0.001,      # theta_1
+#     0.001,      # theta_1_vel
+#     0.001,      # theta_2
+#     0.001,      # theta_2_vel
+# ]))
+
+# # measurement noise covariance
+# Q = jnp.diag(jnp.array([
+#     0.01,      # cart
+#     0.01,      # theta_1
+#     0.01,      # theta_2
+# ]))
+
+# double_pendulum = AutoDiffSystemModel(6, 1, 3, dynamics_func, measurement_func, R, Q)
+# double_pendulum.delta_t = dt
+
+
+
+
+
+########################### Double Inverted Pendulum on a Cart - TAKE 2 ###########################
+#                                                                                        #
+#    - state:   [cart, theta_1, theta_2, cart_vel, theta_1_vel, theta_2_vel]    #                  
+#    - control: [cart_accel]                                                             #
+#    - dynamics: f(x, u) = lagrangian mechanics (with gravity) + noises                           #
+#    - measurement: h(x) = [cart, theta_1, theta_2] + noises                             #                              
+#                                                                                        #
+#    See: https://digitalrepository.unm.edu/cgi/viewcontent.cgi?article=1131&context=math_etds                                     #
+#                                                                                        #
+##########################################################################################
+
+from jax.numpy import sin, cos
+
+dt = 0.001                      # timestep
+M, m1, m2 = 1.5, 0.5, 0.75      # masses
+L1, L2 = 0.5, 0.75              # lengths
+g = 9.81                        # gravity
+
+def dynamics_func(x, u, w):
+    cart, theta_1, theta_2, cart_vel, theta_1_vel, theta_2_vel = x.flatten()
+
+    """ We choose:
+    l1 = (1/2)*L1
+    l1 = (1/2)*L2
+    I1 = (1/12)*m1*L1**2
+    I2 = (1/12)*m2*L2**2
+    """
+
+    D = jnp.array([
+        [ M+m1+m2,                         ((1/2)*m1+m2)*L1*cos(theta_1),           (1/2)*m2*L2*cos(theta_2)              ],
+        [ ((1/2)*m1+m2)*L1*cos(theta_1),   ((1/3)*m1+m2)*L1**2,                     (1/2)*m2*L1*L2*cos(theta_1 - theta_2) ],
+        [ (1/2)*m2*L2*cos(theta_2),        (1/2)*m2*L1*L2*cos(theta_1 - theta_2),   (1/3)*m2*L2**2                        ],
+    ])
+
+    C = jnp.array([
+        [ 0,   -((1/2)*m1+m2)*L1*sin(theta_1)*theta_1_vel,         -(1/2)*m2*L2*sin(theta_2)*theta_2_vel              ],
+        [ 0,    0,                                                  (1/2)*m2*L1*L2*sin(theta_1 - theta_2)*theta_2_vel ],
+        [ 0,   -(1/2)*m2*L1*L2*sin(theta_1 - theta_2)*theta_1_vel,   0                                                ],
+    ])
+
+    G = jnp.array([
+        [0],
+        [-(1/2)*(m1+m2)*L1*g*sin(theta_1)],
+        [-(1/2)*m2*g*L2*sin(theta_2)],
+    ])
+
+    H = jnp.array([
+        [1],
+        [0],
+        [0]
+    ])
+
+    D_inv = jnp.linalg.inv(D)
+
+    A = jnp.block([
+        [ jnp.zeros((3, 3)),   jnp.eye(3) ],
+        [ jnp.zeros((3, 3)),   -D_inv @ C ]
+    ])
+
+    B = jnp.block([
+        [jnp.zeros((3, 1))],
+        [D_inv @ H]
+    ])
+
+    L = jnp.block([
+        [jnp.zeros((3, 1))],
+        [-D_inv @ G]
+    ])
+
+    # EXPERIMENTAL: add some friction in the joints
+    drag = jnp.array([
+        [0],
+        [0],
+        [0],
+        [0],
+        [-jnp.sign(theta_1_vel) * 1.0*theta_1_vel],    # theta_1_vel
+        [-jnp.sign(theta_2_vel) * 1.0*theta_2_vel],    # theta_2_vel
+    ])
+
+    dx_dt = A@x + B@u + L + drag
+
+    # TODO: implement RK4
+
+    return x + dx_dt*dt + w
+
+
+def measurement_func(x, v):
+    return x[[0, 1, 2],:] + v
+
+
+# dynamics noise covariance
+R = jnp.diag(jnp.array([
+    0.001,      # cart
+    0.001,      # cart_vel
+    0.001,      # theta_1
+    0.001,      # theta_1_vel
+    0.001,      # theta_2
+    0.001,      # theta_2_vel
+]))
+
+# measurement noise covariance
+Q = jnp.diag(jnp.array([
+    0.01,      # cart
+    0.01,      # theta_1
+    0.01,      # theta_2
+]))
+
+double_pendulum = AutoDiffSystemModel(6, 1, 3, dynamics_func, measurement_func, R, Q)
+double_pendulum.delta_t = dt
