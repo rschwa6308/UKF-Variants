@@ -54,12 +54,9 @@ assert(interval_overlap((0, 10), (11, 20)) == 0)
 def wrap2pi(angles):
     """
     Wraps an array of angles into [-pi, pi].
+
+    (JIT-compatible implementation)
     """
     
-    # first wrap to [0, 2pi]
-    angle_wrapped = jnp.mod(angles, 2*jnp.pi)
-
-    # then wrap to [-pi, pi]
-    angle_wrapped[angle_wrapped > np.pi] - 2*jnp.pi
-
-    return angle_wrapped
+    angles_wrapped = jnp.mod(angles + jnp.pi, 2*jnp.pi) - jnp.pi
+    return angles_wrapped

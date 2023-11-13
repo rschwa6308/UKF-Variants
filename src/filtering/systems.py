@@ -162,20 +162,14 @@ class AutoDiffSystemModel(GaussianSystemModel, DifferentiableSystemModel):
     def __init__(self, state_dim, control_dim, measurement_dim, dynamics_func, measurement_func, dynamics_noise_cov, measurement_noise_cov):
         super().__init__(state_dim, control_dim, measurement_dim, dynamics_func, measurement_func, dynamics_noise_cov, measurement_noise_cov)
 
-        self.dynamics_func_dx = jax.jacfwd(self.dynamics_func, argnums=0)       # wrt first arg (x)
-        self.dynamics_func_du = jax.jacfwd(self.dynamics_func, argnums=1)       # wrt second arg (u)
-        self.dynamics_func_dw = jax.jacfwd(self.dynamics_func, argnums=2)       # wrt second arg (w)
+        # precompile jacobian evaluation functions
+        self.dynamics_func_dx = jax.jit(jax.jacfwd(dynamics_func, argnums=0))       # wrt first arg (x)
+        self.dynamics_func_du = jax.jit(jax.jacfwd(dynamics_func, argnums=1))       # wrt second arg (u)
+        self.dynamics_func_dw = jax.jit(jax.jacfwd(dynamics_func, argnums=2))       # wrt second arg (w)
 
-        self.measurement_func_dx = jax.jacfwd(self.measurement_func, argnums=0)     # wrt first arg (x)
-        self.measurement_func_dv = jax.jacfwd(self.measurement_func, argnums=1)     # wrt second arg (v)
+        self.measurement_func_dx = jax.jit(jax.jacfwd(measurement_func, argnums=0))     # wrt first arg (x)
+        self.measurement_func_dv = jax.jit(jax.jacfwd(measurement_func, argnums=1))     # wrt second arg (v)
 
-    # def dynamics_model(self, x: np.array, u: np.array) -> np.array:
-    #     w = np.random.multivariate_normal(np.zeros(self.dynamics_noise_dim), self.R).reshape((-1, 1))
-    #     return self.dynamics_func(x, u, w)
-    
-    # def measurement_model(self, x: np.array) -> np.array:
-    #     v = np.random.multivariate_normal(np.zeros(self.measurement_noise_dim), self.Q).reshape((-1, 1))
-    #     return self.measurement_func(x, v)
 
     def query_dynamics_jacobian(self, x: np.array, u: np.array, w: np.array) -> Tuple[np.array, np.array]:
         # evaluate jacobians (JAX requires explicit floats)
