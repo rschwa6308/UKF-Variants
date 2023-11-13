@@ -205,111 +205,108 @@ def runge_kutta(f, t0, y0, h):
 
 from jax.numpy import sin, cos
 
-dt = 0.005                      # timestep
-M, m1, m2 = 5.0, 2.0, 3.0       # masses
-L1, L2 = 2.0, 3.0               # lengths
-g = 9.81                        # gravity
+def generate_pendulum_system(
+        M=5.0, m1=2.0, m2=3.0,
+        L1=2.0, L2=3.0,
+        g=9.81, dt=0.001):
 
+    @jax.jit
+    def dynamics_func(x, u, w):
+        """ We choose:
+        l1 = (1/2)*L1
+        l1 = (1/2)*L2
+        I1 = (1/12)*m1*L1**2
+        I2 = (1/12)*m2*L2**2
+        """
+        def ode(t, x):
+            cart, theta_1, theta_2, cart_vel, theta_1_vel, theta_2_vel = x.flatten()
 
-@jax.jit
-def dynamics_func(x, u, w):
+            D = jnp.array([
+                [ M+m1+m2,                         ((1/2)*m1+m2)*L1*cos(theta_1),           (1/2)*m2*L2*cos(theta_2)              ],
+                [ ((1/2)*m1+m2)*L1*cos(theta_1),   ((1/3)*m1+m2)*L1**2,                     (1/2)*m2*L1*L2*cos(theta_1 - theta_2) ],
+                [ (1/2)*m2*L2*cos(theta_2),        (1/2)*m2*L1*L2*cos(theta_1 - theta_2),   (1/3)*m2*L2**2                        ],
+            ])
 
-    """ We choose:
-    l1 = (1/2)*L1
-    l1 = (1/2)*L2
-    I1 = (1/12)*m1*L1**2
-    I2 = (1/12)*m2*L2**2
-    """
+            C = jnp.array([
+                [ 0,   -((1/2)*m1+m2)*L1*sin(theta_1)*theta_1_vel,         -(1/2)*m2*L2*sin(theta_2)*theta_2_vel              ],
+                [ 0,    0,                                                  (1/2)*m2*L1*L2*sin(theta_1 - theta_2)*theta_2_vel ],
+                [ 0,   -(1/2)*m2*L1*L2*sin(theta_1 - theta_2)*theta_1_vel,   0                                                ],
+            ])
 
-    def ode(t, x):
-        cart, theta_1, theta_2, cart_vel, theta_1_vel, theta_2_vel = x.flatten()
+            g_noisy = g + w[3,0]
+            G = jnp.array([
+                [0],
+                [-(1/2)*(m1+m2)*L1*g_noisy*sin(theta_1)],
+                [-(1/2)*m2*g_noisy*L2*sin(theta_2)],
+            ])
 
-        D = jnp.array([
-            [ M+m1+m2,                         ((1/2)*m1+m2)*L1*cos(theta_1),           (1/2)*m2*L2*cos(theta_2)              ],
-            [ ((1/2)*m1+m2)*L1*cos(theta_1),   ((1/3)*m1+m2)*L1**2,                     (1/2)*m2*L1*L2*cos(theta_1 - theta_2) ],
-            [ (1/2)*m2*L2*cos(theta_2),        (1/2)*m2*L1*L2*cos(theta_1 - theta_2),   (1/3)*m2*L2**2                        ],
-        ])
+            H = jnp.array([
+                [1],
+                [0],
+                [0]
+            ])
 
-        C = jnp.array([
-            [ 0,   -((1/2)*m1+m2)*L1*sin(theta_1)*theta_1_vel,         -(1/2)*m2*L2*sin(theta_2)*theta_2_vel              ],
-            [ 0,    0,                                                  (1/2)*m2*L1*L2*sin(theta_1 - theta_2)*theta_2_vel ],
-            [ 0,   -(1/2)*m2*L1*L2*sin(theta_1 - theta_2)*theta_1_vel,   0                                                ],
-        ])
+            D_inv = jnp.linalg.inv(D)
 
-        g_noisy = g + w[3,0]
-        G = jnp.array([
-            [0],
-            [-(1/2)*(m1+m2)*L1*g_noisy*sin(theta_1)],
-            [-(1/2)*m2*g_noisy*L2*sin(theta_2)],
-        ])
+            A = jnp.block([
+                [ jnp.zeros((3, 3)),   jnp.eye(3) ],
+                [ jnp.zeros((3, 3)),   -D_inv @ C ]
+            ])
 
-        H = jnp.array([
-            [1],
-            [0],
-            [0]
-        ])
+            B = jnp.block([
+                [jnp.zeros((3, 1))],
+                [D_inv @ H]
+            ])
 
-        D_inv = jnp.linalg.inv(D)
+            L = jnp.block([
+                [jnp.zeros((3, 1))],
+                [-D_inv @ G]
+            ])
 
-        A = jnp.block([
-            [ jnp.zeros((3, 3)),   jnp.eye(3) ],
-            [ jnp.zeros((3, 3)),   -D_inv @ C ]
-        ])
+            # add some friction in the joints as determined by noise vector
+            friction_coeffs = w[:3]**2
+            joint_1_vel = theta_1_vel
+            joint_2_vel = theta_2_vel - theta_1_vel
+            drag = jnp.vstack([
+                0,
+                0,
+                0,
+                -jnp.sign(cart_vel) * friction_coeffs[0] * cart_vel,
+                -jnp.sign(joint_1_vel) * friction_coeffs[1] * joint_1_vel,
+                -jnp.sign(joint_2_vel) * friction_coeffs[2] * joint_2_vel,
+            ])
 
-        B = jnp.block([
-            [jnp.zeros((3, 1))],
-            [D_inv @ H]
-        ])
+            dx_dt = A@x + B@u + L + drag
 
-        L = jnp.block([
-            [jnp.zeros((3, 1))],
-            [-D_inv @ G]
-        ])
+            return dx_dt
 
-        # add some friction in the joints as determined by noise vector
-        friction_coeffs = w[:3]**2
-        friction_coeffs = jnp.clip(friction_coeffs, 0, 1.0)
-        joint_1_vel = theta_1_vel
-        joint_2_vel = theta_2_vel - theta_1_vel
-        drag = jnp.vstack([
-            0,
-            0,
-            0,
-            -jnp.sign(cart_vel) * friction_coeffs[0] * cart_vel,
-            -jnp.sign(joint_1_vel) * friction_coeffs[1] * joint_1_vel,
-            -jnp.sign(joint_2_vel) * friction_coeffs[2] * joint_2_vel,
-        ])
+        # # forward euler
+        # x_new = x + ode(0, x) * dt
 
-        dx_dt = A@x + B@u + L + drag
+        # runge kutta
+        x_new = runge_kutta(ode, 0, x, dt)
 
-        return dx_dt
+        return x_new
 
-    # # forward euler
-    # x_new = x + ode(0, x) * dt
+    @jax.jit
+    def measurement_func(x, v):
+        return x[[0, 1],:] + v
 
-    # runge kutta
-    x_new = runge_kutta(ode, 0, x, dt)
+    # dynamics noise covariance
+    R = jnp.diag(jnp.array([
+        1e-12, #0.2,       # cart_vel drag
+        1e-12, # 0.0001,       # joint_1_vel drag
+        1e-12, # 0.0001,       # joint_2_vel drag
+        0.05       # gravity variance
+    ]))
 
-    return x_new
+    # measurement noise covariance
+    Q = jnp.diag(jnp.array([
+        0.20,      # cart
+        0.10,      # theta_1
+    ]))
 
-@jax.jit
-def measurement_func(x, v):
-    return x[[0, 1],:] + v
+    double_pendulum = AutoDiffSystemModel(6, 1, 2, dynamics_func, measurement_func, R, Q)
+    double_pendulum.delta_t = dt
 
-
-# dynamics noise covariance
-R = jnp.diag(jnp.array([
-    0.1,       # cart_vel drag
-    0.1,       # joint_1_vel drag
-    0.1,       # joint_2_vel drag
-    0.05       # gravity variance
-]))
-
-# measurement noise covariance
-Q = jnp.diag(jnp.array([
-    0.20,      # cart
-    0.10,      # theta_1
-]))
-
-double_pendulum = AutoDiffSystemModel(6, 1, 2, dynamics_func, measurement_func, R, Q)
-double_pendulum.delta_t = dt
+    return double_pendulum
