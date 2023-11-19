@@ -25,9 +25,8 @@ class Filter:
 
 class GaussianBeliefFilter(Filter):
     """
-    A class of filters in which the belief is parametrized as a multivariate gaussian distribution
-    
-    For convenience, `self.belief.mean` and `self.belief.covariance` are forwarded to `self.mean` and `self.covariance`
+    A class of filters in which the belief is parametrized as a multivariate gaussian distribution.
+    For convenience, `self.belief.mean` and `self.belief.covariance` are forwarded to `self.mean` and `self.covariance`.
     """
 
     def __init__(self, system: LinearSystemModel):

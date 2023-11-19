@@ -42,3 +42,7 @@ def unscented_transform(func: Callable, mean_x, cov_xx, sigma_point_selector: Si
     cov_xy = weights_cov * (sigma_points - mean_x) @ (sigma_points_transformed - mean_y).T
 
     return mean_y, cov_yy, cov_xy
+
+
+def histogram_transform(func: Callable, TODO):
+    pass

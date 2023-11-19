@@ -310,3 +310,50 @@ def generate_pendulum_system(
     double_pendulum.delta_t = dt
 
     return double_pendulum
+
+
+
+################## Random Synthetic System #############################
+#                                                                      #
+#    - state: x in R^n (constrained to a bounded rectangular region)   #
+#    - control: R^m                                                    #
+#    - dynamics: f(x, u) = a random C^2 smooth function generated      #
+#                          via kernel-based interpolation (+ noise)    #
+#    - measurement: h(x) = a random C^2 smooth function generated      #
+#                          via kernel-based interpolation (+ noise)    #
+#                                                                      #
+########################################################################
+
+from scipy.interpolate import RegularGridInterpolator
+
+def random_smooth_function(input_space_limits, output_space_limits, axis_steps=5):
+    "Generate a random C^2 smooth function by sampling uniformly and then applying cubic interpolation"
+
+    input_dim = len(input_space_limits)
+    output_dim = len(output_space_limits)
+
+    input_space_axis_samples = []
+    for i in range(input_dim):
+        axis_samples = np.linspace(*input_space_limits[i], axis_steps)
+        input_space_axis_samples.append(axis_samples)
+
+    domain_shape = (axis_steps,) * input_dim
+    
+    function_samples = np.zeros(domain_shape + (output_dim,))
+    for i in range(output_dim):
+        function_samples[..., i] = np.random.uniform(*output_space_limits[i], size=domain_shape)
+
+    interp = RegularGridInterpolator(input_space_axis_samples, function_samples, method="cubic")
+
+    return interp
+
+
+# def generate_synthetic_system(state_dim, control_dim, measurement_dim, state_space_limits, state_space_steps):
+#     state_space_axis = []
+#     for i in range(state_dim):
+#         state_space_axis.append(jnp.linspace(*state_space_limits[i], state_space_steps[i]))
+    
+#     control_space_axis = []
+#     for i in range(control_dim):
+#         control_space_axis.append(jnp.linspace(*control_space_limits[i], control_space_steps[i]))
+    
