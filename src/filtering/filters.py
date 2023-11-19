@@ -2,7 +2,9 @@ import numpy as np
 import scipy.linalg
 
 from systems import GaussianSystemModel, SystemModel, LinearSystemModel, DifferentiableSystemModel
+from probability_distributions import ProbabilityDistribution, GaussianDistribution
 from sigma_points import SigmaPointSelector, StandardSigmaPointSelector
+from uncertainty_transforms import unscented_transform
 
 
 class Filter:
@@ -12,6 +14,7 @@ class Filter:
 
     def __init__(self, system: SystemModel):
         self.system = system
+        self.belief = ProbabilityDistribution()
 
     def predict_step(self, u):
         pass
@@ -20,20 +23,46 @@ class Filter:
         pass
 
 
-class KalmanFilter(Filter):
+class GaussianBeliefFilter(Filter):
+    """
+    A class of filters in which the belief is parametrized as a multivariate gaussian distribution
+    
+    For convenience, `self.belief.mean` and `self.belief.covariance` are forwarded to `self.mean` and `self.covariance`
+    """
+
+    def __init__(self, system: LinearSystemModel):
+        super().__init__(system)
+        self.belief = GaussianDistribution(None, None)
+    
+    def initialize(self, mean, covariance):
+        self.belief.mean = mean
+        self.belief.covariance = covariance
+    
+    @property
+    def mean(self):
+        return self.belief.mean
+    
+    @property
+    def covariance(self):
+        return self.belief.covariance
+
+    @mean.setter
+    def mean(self, value):
+        self.belief.mean = value
+    
+    @covariance.setter
+    def covariance(self, value):
+        self.belief.covariance = value
+
+
+class KalmanFilter(GaussianBeliefFilter):
     """
     Implementation of the Bayes Filter where state belief is represented by a multivariate gaussian,
     restricted to purely linear system models with additive zero-mean gaussian noise models.
     """
     def __init__(self, system: LinearSystemModel):
         super().__init__(system)
-        self.mean = None
-        self.covariance = None
-    
-    def initialize(self, mean, covariance):
-        self.mean = mean
-        self.covariance = covariance
-    
+
     def predict_step(self, u):
         """
         Kalman predict step:
@@ -59,7 +88,7 @@ class KalmanFilter(Filter):
         self.covariance -= K @ self.system.C @ self.covariance
 
 
-class ExtendedKalmanFilter(Filter):
+class ExtendedKalmanFilter(GaussianBeliefFilter):
     """
     Implementation of the Bayes Filter where state belief is represented by a multivariate gaussian,
     allowing for potentially non-linear systems, with potentially non-additive zero-mean gaussian noise models.
@@ -68,12 +97,6 @@ class ExtendedKalmanFilter(Filter):
     """
     def __init__(self, system: DifferentiableSystemModel):  # NOTE: this type hint should be the intersection of DifferentiableSystemModel and GaussianSystemModel, but python doesn't currently support intersection types
         super().__init__(system)
-        self.mean = None
-        self.covariance = None
-    
-    def initialize(self, mean, covariance):
-        self.mean = mean
-        self.covariance = covariance
     
     def predict_step(self, u):
         """
@@ -116,45 +139,26 @@ class ExtendedKalmanFilter(Filter):
 
     
 
-class UnscentedKalmanFilter(Filter):
+class UnscentedKalmanFilter(GaussianBeliefFilter):
     def __init__(self, system: GaussianSystemModel, sigma_point_selector: SigmaPointSelector = None):
         super().__init__(system)
-
-        self.mean = None
-        self.covariance = None
 
         if sigma_point_selector is None:
             sigma_point_selector = StandardSigmaPointSelector()
 
         self.sigma_point_selector = sigma_point_selector
 
-
-    def initialize(self, mean, covariance):
-        self.mean = mean
-        self.covariance = covariance
-    
-    
     def predict_step(self, u):
         # Note: for non-additive noise models, UKF selects sigma points from an "augmented" state + noise space
         augmented_mean = np.concatenate([self.mean, np.zeros((self.system.dynamics_noise_dim, 1))])
         augmented_cov = scipy.linalg.block_diag(self.covariance, self.system.dynamics_noise_cov)
 
-        # select sigma points in accordance with prior
-        sigma_points, weights_mean, weights_cov = self.sigma_point_selector.select_sigma_points(augmented_mean, augmented_cov)
-
-        # pass sigma points through dynamics model
-        sigma_points_transformed = []
-        for i in range(sigma_points.shape[1]):
-            point = sigma_points[:,[i]]
+        def augmented_dynamics_model(point):
             x, w = np.split(point, [self.system.state_dim])     # un-augment
             x_prime = self.system.query_dynamics_model(x, u, w)
-            sigma_points_transformed.append(x_prime)
-        
-        sigma_points_transformed = np.hstack(sigma_points_transformed)
+            return x_prime
 
-        # fit a gaussian to weighted transformed sigma points
-        mean_hat = np.sum(weights_mean * sigma_points_transformed, axis=1, keepdims=True)
-        cov_hat = weights_cov * (sigma_points_transformed - mean_hat) @ (sigma_points_transformed - mean_hat).T
+        mean_hat, cov_hat, _ = unscented_transform(augmented_dynamics_model, augmented_mean, augmented_cov, self.sigma_point_selector)
 
         self.mean = mean_hat
         self.covariance = cov_hat
@@ -165,24 +169,14 @@ class UnscentedKalmanFilter(Filter):
         augmented_mean = np.concatenate([self.mean, np.zeros((self.system.measurement_noise_dim, 1))])
         augmented_cov = scipy.linalg.block_diag(self.covariance, self.system.measurement_noise_cov)
 
-        # select sigma points in accordance with prior
-        sigma_points, weights_mean, weights_cov = self.sigma_point_selector.select_sigma_points(augmented_mean, augmented_cov)
-
-        # pass sigma points through measurement model
-        sigma_points_transformed = []
-        for i in range(sigma_points.shape[1]):
-            point = sigma_points[:,[i]]
+        def augmented_measurement_model(point):
             x, v = np.split(point, [self.system.state_dim])     # un-augment
             x_prime = self.system.query_measurement_model(x, v)
-            sigma_points_transformed.append(x_prime)
+            return x_prime
 
-        sigma_points_transformed = np.hstack(sigma_points_transformed)
+        z_hat, cov_zz, cov_xz = unscented_transform(augmented_measurement_model, augmented_mean, augmented_cov, self.sigma_point_selector)
 
-        # fit a gaussian to weighted transformed sigma points
-        z_hat = np.sum(weights_mean * sigma_points_transformed, axis=1, keepdims=True)
-
-        cov_zz = (weights_cov * (sigma_points_transformed - z_hat)) @ (sigma_points_transformed - z_hat).T
-        cov_xz = weights_cov * (sigma_points[:self.system.state_dim, :] - self.mean) @ (sigma_points_transformed - z_hat).T
+        cov_xz = cov_xz[:self.system.state_dim, :self.system.state_dim]     # chop off augmented noise covariances
 
         # Kalman update step
         K = cov_xz @ np.linalg.inv(cov_zz)
