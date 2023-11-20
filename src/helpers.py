@@ -41,3 +41,18 @@ def wrap2pi(angles):
     
     angles_wrapped = jnp.mod(angles + jnp.pi, 2*jnp.pi) - jnp.pi
     return angles_wrapped
+
+
+def cartesian_product(arrays):
+    "Compute the explicit (dense) cartesian product of given arrays"
+    la = len(arrays)
+
+    if la == 1:
+        dtype = arrays[0].dtype
+    else:
+        dtype = np.result_type(*arrays)
+    
+    arr = np.empty([len(a) for a in arrays] + [la], dtype=dtype)
+    for i, a in enumerate(np.ix_(*arrays)):
+        arr[...,i] = a
+    return arr

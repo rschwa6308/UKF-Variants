@@ -95,7 +95,7 @@ def histogram_transform(func: Callable, pdf: HistogramDistribution):
         # Distribute mass across output bins intersecting the destination region
 
         # The image is a polytope with 2*input_dim vertices,
-        # more specifically, an "orthoplex" (see https://en.wikipedia.org/wiki/Cross-polytope).
+        # (topologically a hypercube).
         # It will be degenerate if output_dim < input_dim
         # - in 1D: interval
         # - in 2D: quadrilateral

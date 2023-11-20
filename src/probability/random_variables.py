@@ -22,3 +22,9 @@ class RandomVariable:
         support_sum = self.support + other.support
         pdf_convolution = convolve_distributions(self.pdf, other.pdf)
         return RandomVariable(support_sum, pdf_convolution)
+
+    def mean(self):
+        pass
+
+    def covariance(self):
+        pass

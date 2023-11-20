@@ -2,7 +2,7 @@ from matplotlib import pyplot as plt
 from matplotlib.patches import ConnectionPatch, FancyArrowPatch
 import numpy as np
 
-from helpers import query_pdf
+# from helpers import query_pdf
 
 
 def plot_pdf(ax: plt.Axes, domain: np.array, pdf_values: np.array, transpose_axis=False, **args):
