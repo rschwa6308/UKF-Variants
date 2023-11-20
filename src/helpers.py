@@ -15,27 +15,8 @@ def vec(*vals):
     return np.vstack([*vals])
 
 
-
-
 def lerp(a, b, t):
     return a * (1 - t) + b * t
-
-
-def query_pdf(domain, pdf_values, x, interp=True):
-    domain_step = domain[1] - domain[0]
-    index = (x - domain[0]) / domain_step
-
-    index -= 0.5        # PDF samples at bin midpoint!
-
-    if not interp:
-        return pdf_values[int(index)]
-
-    else:
-        index_low, index_high = int(np.floor(index)), int(np.ceil(index))
-        index_low = max(0, index_low)
-        index_high = min(len(pdf_values)-1, index_high)
-        t = index - index_low
-        return lerp(pdf_values[index_low], pdf_values[index_high], t)
 
 
 def interval_overlap(interval1, interval2):

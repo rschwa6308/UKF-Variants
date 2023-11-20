@@ -1,7 +1,7 @@
 import numpy as np
 from typing import List, Tuple
 
-from matrix_square_root import *
+from uncertainty_propagation.matrix_square_root import *
 
 
 
