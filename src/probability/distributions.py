@@ -1,13 +1,20 @@
+from typing import List
 import numpy as np
+from matplotlib import pyplot as plt
 
-from helpers import lerp, cartesian_product
+from helpers import lerp, cartesian_product, format_matrix
+from probability.visualization import plot_covariance_ellipse, plot_pdf_values
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 
 
 class ProbabilityDistribution:
+    type = "GENERIC"
+
     def __init__(self, dim: int):
         self.dim = dim
 
-    def pdf(self, x):
+    def pdf(self, x) -> float:
         pass
 
     def get_mean(self):
@@ -16,26 +23,86 @@ class ProbabilityDistribution:
     def get_covariance(self):
         pass
 
+    def plot(self, ax: plt.Axes=None, label="DEFAULT", cmap="Blues", contours_filled=True, **kwargs):
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(6, 6))
+        
+        fig = ax.figure
+        
+        if label == "DEFAULT":
+            label = str(self)
+        
+        mean, cov = self.get_mean(), self.get_covariance()
 
-class GaussianDistribution(ProbabilityDistribution):
+        if self.dim == 1:
+            "plot PDF values numerically"
+    
+            # center axis at the mean with padding scaled wrt largest std value
+            ax_width = 5 * np.sqrt(np.max(np.diag(cov)))
+            x_low, x_high = mean[0] - ax_width, mean[0] + ax_width
+
+            samples = np.linspace(x_low, x_high, 1000)    # large number of sample points
+            pdf_values = self.pdf(samples.reshape(-1, 1)).flatten()
+            plot_pdf_values(ax, samples, pdf_values, label=label)
+            
+            # set axis limits
+            ax.set_xlim(samples[0], samples[-1])
+            ax.set_ylim(0.0, np.max(pdf_values) * 1.2)      # include some vertical padding
+        
+        if self.dim == 2:
+            "plot PDF values numerically using contourf"
+
+            # center axis at the mean with padding scaled wrt largest std value
+            ax_width = 3 * np.sqrt(np.max(np.diag(cov)))
+            x_low, x_high = mean[0] - ax_width, mean[0] + ax_width
+            y_low, y_high = mean[1] - ax_width, mean[1] + ax_width
+
+            ax.axis("equal")
+
+            samples_x = np.linspace(x_low, x_high, 100)    # large number of sample points
+            samples_y = np.linspace(y_low, y_high, 100)    # large number of sample points
+            samples = cartesian_product([samples_x, samples_y])
+            pdf_values = self.pdf(samples)
+
+            if contours_filled:
+                cs = ax.contourf(samples_x, samples_y, pdf_values.T, cmap=cmap, **kwargs)
+                # cs = ax.pcolormesh(samples_x, samples_y, pdf_values.T, cmap=cmap, **kwargs)
+                divider = make_axes_locatable(ax)
+                cax = divider.append_axes("right", size="5%", pad=0.05)
+                fig.colorbar(cs, cax=cax)
+            else:
+                ax.contour(samples_x, samples_y, pdf_values.T, cmap=cmap, **kwargs)
+            
+            # set axis limits
+            ax.set_xlim(x_low, x_high)
+            ax.set_ylim(y_low, y_high)
+
+        if label is not None and self.dim != 2:
+            ax.legend()
+
+
+
+class ParametricDistribution(ProbabilityDistribution):
+    pass
+
+
+class GaussianDistribution(ParametricDistribution):
+    type = "GaussianDistribution"
+
     def __init__(self, mean, covariance):
         dim = covariance.shape[0]
         super().__init__(dim)
 
         self.mean = mean
         self.covariance = covariance
-    
-    def pdf(self, x):
-        assert(x.shape[-1] == self.dim)
 
+    def pdf(self, x):
         x_flat = x.reshape(-1, self.dim)
 
-        # TODO: verify math
         cov_det = np.linalg.det(self.covariance)
         cov_inv = np.linalg.inv(self.covariance)
         
         eta = 1 / np.sqrt((2*np.pi)**self.dim * cov_det)
-        print((x - self.mean).shape)
         vals = eta * np.exp(-0.5 * np.sum((x_flat - self.mean) @ cov_inv * (x_flat - self.mean), axis=1))
 
         vals = vals.reshape(x.shape[:-1])
@@ -49,6 +116,38 @@ class GaussianDistribution(ProbabilityDistribution):
     
     def get_covariance(self):
         return self.covariance
+
+    
+    def plot(self, ax: plt.Axes=None, label="DEFAULT", mode_2D="contour_plot", **kwargs):
+        if self.dim != 2 or mode_2D != "ellipse":
+            super().plot(ax, label=label, **kwargs)
+            return
+
+        if ax is None:
+            _, ax = plt.subplots(figsize=(6, 6))
+                
+        if label == "DEFAULT":
+            mean_str = format_matrix([self.mean])
+            cov_str = "\n    ".join(format_matrix(self.covariance).split("\n"))
+            label = f"μ = {mean_str}\nΣ = {cov_str}"
+        
+        # center axis at the mean with padding scaled wrt largest std value
+        ax_width = 3 * np.sqrt(np.max(np.diag(self.covariance)))
+        x_low, x_high = self.mean[0] - ax_width, self.mean[0] + ax_width
+        y_low, y_high = self.mean[1] - ax_width, self.mean[1] + ax_width
+
+        ax.axis("equal")
+
+        "draw covariance ellipse on domain"
+        plot_covariance_ellipse(ax, self.mean, self.covariance, label=label)
+        ax.plot(*self.mean, marker=".", color="black")     # point at mean
+
+        # set axis limits
+        ax.set_xlim(x_low, x_high)
+        ax.set_ylim(y_low, y_high)
+
+        if label is not None:
+            ax.legend()
 
 
 
@@ -83,6 +182,8 @@ class HistogramDistribution(ProbabilityDistribution):
     >>> HistogramDistribution(domain_bounds, bin_counts, values)
     ```
     """
+
+    type = "HistogramDistribution"
 
     def __init__(self, domain_bounds, bin_counts, values):
         assert(len(domain_bounds) == len(bin_counts))
@@ -160,7 +261,7 @@ class HistogramDistribution(ProbabilityDistribution):
     def get_mean(self):
         values_flat = self.values.reshape(-1, 1)
         bin_midpoints_flat = self.bin_midpoints.reshape(-1, self.dim)
-        return np.sum(values_flat * bin_midpoints_flat)
+        return np.sum(values_flat * bin_midpoints_flat, axis=0)
 
     def get_covariance(self):
         mean = self.get_mean()
@@ -171,10 +272,50 @@ class HistogramDistribution(ProbabilityDistribution):
 
 
 
+class MixtureDistribution(ProbabilityDistribution):
+    def __init__(self, components: List[ProbabilityDistribution], weights):
+        assert(all(c.dim == components[0].dim for c in components))
+        assert(np.isclose(np.sum(weights), 1.0))
+        assert(len(components) == len(weights))
+
+        super().__init__(components[0].dim)
+
+        self.components = components
+        self.weights = np.array(weights)
+    
+    def pdf(self, x):
+        assert(x.shape[-1] == self.dim)
+        x_flat = x.reshape(-1, self.dim)
+
+        component_values = np.array([c.pdf(x_flat) for c in self.components])
+        vals = np.sum(self.weights.reshape(-1, 1) * component_values, axis=0)
+
+        vals = vals.reshape(x.shape[:-1])
+        return vals
+    
+    def get_mean(self):
+        component_means = np.array([c.get_mean() for c in self.components])
+        mean = np.sum(self.weights.reshape(-1, 1) * component_means, axis=0)
+        return mean
+    
+    def get_covariance(self):
+        # General derivation can be found here:
+        # https://stats.stackexchange.com/questions/16608/what-is-the-variance-of-the-weighted-mixture-of-two-gaussians
+        component_means = np.array([c.get_mean() for c in self.components])
+        component_covs = np.array([c.get_covariance() for c in self.components])
+
+        weights = self.weights.reshape(-1,1)
+        mean = np.sum(weights * component_means, axis=0)
+
+        cov = np.sum(weights.reshape(-1,1,1) * component_covs, axis=0) \
+            + component_means.T @ (weights * component_means) \
+            - mean.reshape(self.dim, 1) @ mean.reshape(1, self.dim)
+        return cov
+
+
+
+
 class ParticleDistribution(ProbabilityDistribution):
+    type = "ParticleDistribution"
     pass    # TODO
 
-
-
-def convolve_distributions(pdf1: ProbabilityDistribution, pdf2: ProbabilityDistribution):
-    pass        # TODO

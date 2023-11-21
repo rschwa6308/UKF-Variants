@@ -5,16 +5,15 @@ import numpy as np
 # from helpers import query_pdf
 
 
-def plot_pdf(ax: plt.Axes, domain: np.array, pdf_values: np.array, transpose_axis=False, **args):
-    "Plot a PDF over an n-point domain represented by n-1 bins"
-    dx = domain[1] - domain[0]
+def plot_pdf_values(ax: plt.Axes, sample_points: np.array, pdf_values: np.array, transpose_axis=False, **args):
+    "Plot a PDF evaluated at sample points"
 
     if not transpose_axis:
-        ax.fill_between(domain[:-1] + dx/2, pdf_values, edgecolor="black", **args)
+        ax.fill_between(sample_points, pdf_values, edgecolor="black", **args)
         ax.set_ylim(0, None)
 
     else:
-        ax.fill_betweenx(domain[:-1] + dx/2, pdf_values,edgecolor="black", **args)
+        ax.fill_betweenx(sample_points, pdf_values,edgecolor="black", **args)
         ax.set_xlim(0, None)
 
 
@@ -27,8 +26,8 @@ def plot_pdf_transform(domain, prior, transform_values, posterior, slice_highlig
     axes[1, 0].axis("off")
 
     # plot PDFs
-    plot_pdf(axes[1, 1], domain, prior, label=prior_label, zorder=2)
-    plot_pdf(axes[0, 0], domain, posterior, transpose_axis=True, label=posterior_label, zorder=2)
+    plot_pdf_values(axes[1, 1], domain, prior, label=prior_label, zorder=2)
+    plot_pdf_values(axes[0, 0], domain, posterior, transpose_axis=True, label=posterior_label, zorder=2)
 
     # plot transform
     axes[0, 1].plot(domain, transform_values, label=transform_label)
@@ -101,14 +100,14 @@ def plot_pdf_transform(domain, prior, transform_values, posterior, slice_highlig
         ))
 
         mask = (x_low <= domain) & (domain <= x_high)
-        plot_pdf(
+        plot_pdf_values(
             axes[1, 1], domain[mask], prior[mask[:-1]][:-1],
             linestyle="--", alpha=0.9, linewidth=0.8, facecolor=highlight_color,
             zorder=2
         )
 
         mask = (y_low <= domain) & (domain <= y_high)
-        plot_pdf(
+        plot_pdf_values(
             axes[0, 0], domain[mask], posterior[mask[:-1]][:-1], transpose_axis=True,
             linestyle="--", alpha=0.9, linewidth=0.8, facecolor=highlight_color,
             zorder=2
@@ -123,7 +122,7 @@ import matplotlib.patches
 import matplotlib.transforms
 
 
-def plot_covariance_ellipse(ax, mean, cov, n_std=1.0, **kwargs):
+def plot_covariance_ellipse(ax, mean, cov, n_std=1.0, edgecolor="black", **kwargs):
     pearson = cov[0, 1] / np.sqrt(cov[0, 0] * cov[1, 1])
 
     # Using a special case to obtain the eigenvalues of this two-dimensional distribution
@@ -131,7 +130,7 @@ def plot_covariance_ellipse(ax, mean, cov, n_std=1.0, **kwargs):
     ell_radius_y = np.sqrt(1 - pearson)
     ellipse = matplotlib.patches.Ellipse(
         (0, 0), width=ell_radius_x * 2, height=ell_radius_y * 2,
-        **kwargs
+        edgecolor=edgecolor, **kwargs
     )
 
     mean_x, mean_y = mean.flatten()

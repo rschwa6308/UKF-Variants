@@ -1,3 +1,4 @@
+from typing import List
 import numpy as np
 import jax.numpy as jnp
 
@@ -56,3 +57,22 @@ def cartesian_product(arrays):
     for i, a in enumerate(np.ix_(*arrays)):
         arr[...,i] = a
     return arr
+
+
+def format_matrix(mat, element_formatter=str) -> List[str]:
+    rows = [
+        " ".join(map(element_formatter, row))
+        for row in mat
+    ]
+
+    if len(rows) == 1:
+        return "[ " + rows[0] + " ]"
+
+    rows[0]  = "⎡" + rows[0]  + "⎤"
+    rows[-1] = "⎣" + rows[-1] + "⎦"
+
+    for i in range(1, len(rows)-2):
+        rows[i] = "⎥" + rows[i] + "⎥"
+
+    return "\n".join(rows)
+

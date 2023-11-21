@@ -1,7 +1,8 @@
 import numpy as np
 from typing import List, Tuple
 
-from probability.distributions import ProbabilityDistribution, GaussianDistribution, convolve_distributions
+from probability.distributions import ProbabilityDistribution, GaussianDistribution
+from probability.operations import convolve_distributions
 
 
 
@@ -24,7 +25,7 @@ class RandomVariable:
         return RandomVariable(support_sum, pdf_convolution)
 
     def mean(self):
-        pass
+        return self.pdf.get_mean()
 
     def covariance(self):
-        pass
+        return self.pdf.get_covariance()
