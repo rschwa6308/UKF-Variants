@@ -106,7 +106,7 @@ def histogram_transform(func: Callable, pdf: HistogramDistribution):
         # add_mass_to_pdf_in_interval(domain, output_pdf, image[0], image[1], mass)
 
         # use a rasterization scheme
-        image_bounding_box = 
+        image_bounding_box = TODO
 
     return output_pdf
 

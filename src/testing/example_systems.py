@@ -3,8 +3,9 @@ import jax
 import jax.numpy as jnp
 
 import os, sys
-from helpers import wrap2pi
+sys.path.append(os.path.dirname(__file__) + "/..")
 sys.path.append(os.path.dirname(__file__) + "/../filtering/")
+from helpers import wrap2pi
 
 from systems import LinearSystemModel, AutoDiffSystemModel
 

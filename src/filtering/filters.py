@@ -3,8 +3,8 @@ import scipy.linalg
 
 from systems import GaussianSystemModel, SystemModel, LinearSystemModel, DifferentiableSystemModel
 from probability.distributions import ProbabilityDistribution, GaussianDistribution
-from uncertainty_propagation.sigma_points import SigmaPointSelector, StandardSigmaPointSelector
-from uncertainty_propagation.transforms import unscented_transform
+from probability.sigma_points import SigmaPointSelector, StandardSigmaPointSelector
+from probability.transforms import unscented_transform
 
 
 class Filter:
@@ -14,7 +14,7 @@ class Filter:
 
     def __init__(self, system: SystemModel):
         self.system = system
-        self.belief = ProbabilityDistribution()
+        self.belief = ProbabilityDistribution(system.state_dim)
 
     def predict_step(self, u):
         pass
@@ -31,7 +31,10 @@ class GaussianBeliefFilter(Filter):
 
     def __init__(self, system: LinearSystemModel):
         super().__init__(system)
-        self.belief = GaussianDistribution(None, None)
+        self.belief = GaussianDistribution(
+            np.zeros(self.system.state_dim),
+            np.eye(self.system.state_dim)
+        )
     
     def initialize(self, mean, covariance):
         self.belief.mean = mean
