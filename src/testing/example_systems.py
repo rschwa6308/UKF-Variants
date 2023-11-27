@@ -161,14 +161,14 @@ def generate_SLAM_system(num_landmarks, dt=0.1):
         return z
 
     # dynamics noise covariance
-    rot1_variance  = 0.0001
-    drive_variance = 0.001
-    rot2_variance  = 0.0001
+    rot1_variance  = 0.0002
+    drive_variance = 0.01
+    rot2_variance  = 0.0002
     R = np.diag([rot1_variance, drive_variance, rot2_variance])
 
     # measurement noise covariance
-    bearing_variance = 0.001
-    range_variance = 0.01
+    bearing_variance = 1e-4
+    range_variance = 1e-3
     Q = np.diag([bearing_variance, range_variance] * num_landmarks)
 
     SLAM_nonlinear = AutoDiffSystemModel(
