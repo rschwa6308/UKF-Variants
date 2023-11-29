@@ -160,36 +160,35 @@ class HistogramDistribution(ProbabilityDistribution):
      
     The `domain` itself is constructed internally as the cartesian product of `[np.linspace(*domain_bounds[i], bin_counts[i]+1) for i in range(D)]`
 
-     - `values[i,...,k]` represents the total probability mass in the rectangular region between
+     - `pmf_values[i,...,k]` represents the total probability mass in the rectangular region between
        `domain[i,...,k]` and `domain[i+1,...,k+1]`, and thus has shape one less than `domain` along each dimension:
        `(domain.shape[0]-1, ..., domain.shape[-1]-1)`
-
+    
+    If `pmf_values=None`, the uniform distribution will be assumed.
 
     Example (1D): the uniform distribution on (0, 50):
     ```
     >>> domain_bounds = [(0.0, 5.0)]
     >>> bin_counts = [5]
-    >>> values =  np.array([0.2,  0.2,  0.2,  0.2,  0.2])
-    >>> HistogramDistribution(domain_bounds, bin_counts, values)
+    >>> pmf_values =  np.array([0.2,  0.2,  0.2,  0.2,  0.2])
+    >>> HistogramDistribution(domain_bounds, bin_counts, pmf_values)
     ```
 
     Example (2D): the uniform distribution on (-1, +1) x (-5, 5):
     ```
     >>> domain_bounds = [(-1.0, +1.0), (-5.0, 5.0)]
     >>> bin_counts = [200, 1000]      # yields square bins
-    >>> values = np.ones((200, 1000))
-    >>> values /= np.sum(values)
-    >>> HistogramDistribution(domain_bounds, bin_counts, values)
+    >>> pmf_values = np.ones((200, 1000))
+    >>> pmf_values /= np.sum(pmf_values)
+    >>> HistogramDistribution(domain_bounds, bin_counts, pmf_values)
     ```
     """
 
     type = "HistogramDistribution"
 
-    def __init__(self, domain_bounds, bin_counts, values):
+    def __init__(self, domain_bounds, bin_counts, pmf_values):
+        # Set up domain
         assert(len(domain_bounds) == len(bin_counts))
-        assert(all(domain_dim == values_dim for domain_dim, values_dim in zip(bin_counts, values.shape)))
-        assert(np.isclose(np.sum(values), 1.0))
-
         super().__init__(len(domain_bounds))
 
         self.domain_bounds = np.array(domain_bounds)
@@ -200,13 +199,35 @@ class HistogramDistribution(ProbabilityDistribution):
             for i in range(self.dim)
         ])
 
+        # pre-compute some useful information about bin geometry
         self.steps = (self.domain_bounds[:,1] - self.domain_bounds[:,0]) / self.bin_counts
+        self.bin_volume = np.prod(self.steps)
 
         self.bin_lowers = self.domain[(np.s_[:-1],) * self.dim]
         self.bin_uppers = self.domain[(np.s_[1:],) * self.dim]
         self.bin_midpoints = self.bin_lowers + self.steps/2
 
-        self.values = values
+        # Set pmf_values
+        if pmf_values is None:  # default to uniform distribution
+            pmf_values = np.ones(self.bin_midpoints.shape[:-1])
+            pmf_values /= np.sum(pmf_values)
+
+        assert(all(domain_dim == pmf_values_dim for domain_dim, pmf_values_dim in zip(bin_counts, pmf_values.shape)))
+        assert(np.isclose(np.sum(pmf_values), 1.0))
+
+        self.pmf_values = pmf_values
+
+    @property
+    def pdf_values(self):
+        return self.pmf_values / self.bin_volume
+
+    @pdf_values.setter
+    def pdf_values(self, values):
+        self.pmf_values = values * self.bin_volume
+
+    def get_bin_index(self, x):
+        "Get the fractional index of the bin containing point x"
+        return (x - self.domain_bounds[:,0]) / self.steps
 
     def pdf(self, x, interp=False):
         x_flat = x.reshape(-1, self.dim)
@@ -214,7 +235,8 @@ class HistogramDistribution(ProbabilityDistribution):
         # mask out query points that are outside the domain - they will be assigned value 0
         mask = np.all((x_flat >= self.domain_bounds[:,0]) & (x_flat < self.domain_bounds[:,1]), axis=1)
 
-        index = (x_flat - self.domain_bounds[:,0]) / self.steps
+        index = self.get_bin_index(x_flat)
+        # index = (x_flat - self.domain_bounds[:,0]) / self.steps
         # index -= 0.5        # PDF samples at bin midpoint!
 
         if not interp:
@@ -223,8 +245,8 @@ class HistogramDistribution(ProbabilityDistribution):
 
             # return 0 if point is outside domain
             vals = np.zeros((x_flat.shape[0]))
-            vals[mask] = np.take(self.values,
-                np.ravel_multi_index(index_bin[mask].T, self.values.shape)
+            vals[mask] = np.take(self.pdf_values,
+                np.ravel_multi_index(index_bin[mask].T, self.pdf_values.shape)
             )
         
         else:
@@ -238,12 +260,12 @@ class HistogramDistribution(ProbabilityDistribution):
             # print(index_high)
 
             # t = index - index_low
-            # print(self.values.shape)
-            # values_low = np.take(self.values,
-            #     np.ravel_multi_index(index_low.T, self.values.shape)
+            # print(self.pmf_values.shape)
+            # values_low = np.take(self.pmf_values,
+            #     np.ravel_multi_index(index_low.T, self.pmf_values.shape)
             # )
-            # values_high = np.take(self.values,
-            #     np.ravel_multi_index(index_high.T, self.values.shape)
+            # values_high = np.take(self.pmf_values,
+            #     np.ravel_multi_index(index_high.T, self.pmf_values.shape)
             # )
 
             # print(values_low)
@@ -259,13 +281,13 @@ class HistogramDistribution(ProbabilityDistribution):
         return f"HistogramDistribution(domain_bounds=[{', '.join(map(str, self.domain_bounds))}], bin_counts={self.bin_counts})"
 
     def get_mean(self):
-        values_flat = self.values.reshape(-1, 1)
+        values_flat = self.pmf_values.reshape(-1, 1)
         bin_midpoints_flat = self.bin_midpoints.reshape(-1, self.dim)
         return np.sum(values_flat * bin_midpoints_flat, axis=0)
 
     def get_covariance(self):
         mean = self.get_mean()
-        values_flat = self.values.reshape(-1, 1)
+        values_flat = self.pmf_values.reshape(-1, 1)
         bin_midpoints_flat = self.bin_midpoints.reshape(-1, self.dim)
         return (bin_midpoints_flat - mean).T @ (values_flat * (bin_midpoints_flat - mean))
 

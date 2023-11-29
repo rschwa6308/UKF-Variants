@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Callable, Tuple
+from typing import Callable, Optional, Tuple
 from helpers import interval_overlap
 
 from probability.distributions import ProbabilityDistribution, GaussianDistribution, HistogramDistribution
@@ -68,45 +68,88 @@ def add_mass_to_pdf_in_interval(domain, pdf, low, high, mass):
 
 
 
-
-def histogram_transform(func: Callable, pdf: HistogramDistribution):
+def histogram_transform(func: Callable, pdf: HistogramDistribution, output_pdf: Optional[HistogramDistribution] = None):
     if pdf.dim > 1:
         raise NotImplementedError("Histogram transform for dim > 1 not yet supported.")
 
     # apply function to the entire domain
     func_values = func(pdf.domain)
-    func_values_min, func_values_max = (np.min(func_values), np.max(func_values))
+    func_values_min, func_values_max = np.min(func_values), np.max(func_values)
 
-    # define the output domain to have sample density (approximately) equal to input domain
-    input_domain_volume = pdf.domain[-1] - pdf.domain[0]
-    output_domain_volume = func_values_max - func_values_min
-    output_domain = np.linspace(
-        func_values_min, func_values_max,
-        len(pdf.domain) * (output_domain_volume / input_domain_volume)
-    )
+    if output_pdf is None:
+        # define the output domain to have sample density (approximately) equal to input domain
+        # TODO: modify this behavior with a flag
+        input_domain_width = pdf.domain[-1,0] - pdf.domain[0,0]
+        output_domain_width = func_values_max - func_values_min
+        domain_width_ratio = output_domain_width / input_domain_width
+        
+        output_pdf = HistogramDistribution(
+            [(func_values_min, func_values_max)],
+            np.round(pdf.bin_counts * domain_width_ratio).astype(int),
+            None
+        )
+    else:
+        # verify that function output fits within user-provided domain
+        if func_values_min < output_pdf.domain_bounds[0,0] or func_values_min > output_pdf.domain_bounds[0,1]:
+            raise ValueError("The domain of user-provided `output_pdf` is not large enough to accommodate the image of the input domain.")
+            # TODO: offer auto-expand mode
 
-    output_pdf = np.zeros_like(output_domain)
+    # set output pmf to 0, then accumulate mass
+    output_pdf.pmf_values *= 0
 
-    # iterate over bins - TODO: vectorize
-    for i in range(len(pdf.domain) - 1):
-        mass = pdf[i] * (pdf.domain[i+1] - pdf.domain[i])   # mass in source bin [i, i+1]
-        image = (func_values[i], func_values[i+1])          # mass transport destination
-    
+    # iterate over input domain bins - TODO: vectorize
+    for i in range(pdf.bin_counts[0]):
+        mass = pdf.pmf_values[i]                        # mass in source bin [i, i+1]
+        image = (func_values[i], func_values[i+1])      # mass transport destination
+
+        # enforce image[0] <= image[1]
+        image = (min(image), max(image))
+
+        # volume of mass destination
+        image_volume = image[1] - image[0]
+
+        # identify the indices of the bins corresponding to the image
+        image_bins = (
+            output_pdf.get_bin_index(image[0]),
+            output_pdf.get_bin_index(image[1])
+        )
+
         # Distribute mass across output bins intersecting the destination region
 
         # The image is a polytope with 2*input_dim vertices,
         # (topologically a hypercube).
-        # It will be degenerate if output_dim < input_dim
         # - in 1D: interval
         # - in 2D: quadrilateral
-        # - in 3D: octahedron
-        # - in 4D: 16-cell
+        # - in 3D: cube
+        # - in 4D: hypercube
+        # Note: image will be degenerate if output_dim < input_dim
 
-        
-        # add_mass_to_pdf_in_interval(domain, output_pdf, image[0], image[1], mass)
+        # Use a rasterization scheme
 
-        # use a rasterization scheme
-        image_bounding_box = TODO
+        # form the bounding box of the image (in bin space)
+        image_bins_bbox = [
+            np.floor(image_bins[0]).astype(int),
+            np.ceil(image_bins[1]).astype(int),
+        ]
+
+        # TODO: decide on correct endpoint clipping
+        image_bins_bbox[1] = np.clip(image_bins_bbox[1], 0, output_pdf.bin_counts[0]-1)
+
+        # iterate over bins in bounding box
+        for bin in range(image_bins_bbox[0][0], image_bins_bbox[1][0]):
+            # compute volume of intersection between bin and image
+            intersection_volume = interval_overlap(
+                (output_pdf.domain[bin], output_pdf.domain[bin+1]),
+                image
+            )
+
+            # compute portion of mass delivered to intersection
+            mass_fraction = intersection_volume / image_volume
+
+            # deliver mass
+            output_pdf.pmf_values[bin] += mass * mass_fraction
+
+    assert(np.isclose(np.sum(output_pdf.pmf_values), 1.0))
 
     return output_pdf
 

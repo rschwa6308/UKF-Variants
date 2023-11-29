@@ -2,11 +2,14 @@ from matplotlib import pyplot as plt
 from matplotlib.patches import ConnectionPatch, FancyArrowPatch
 import numpy as np
 
+from probability.distributions import HistogramDistribution
+
 # from helpers import query_pdf
 
 
 def plot_pdf_values(ax: plt.Axes, sample_points: np.array, pdf_values: np.array, transpose_axis=False, **args):
     "Plot a PDF evaluated at sample points"
+    assert(sample_points.shape == pdf_values.shape)
 
     if not transpose_axis:
         ax.fill_between(sample_points, pdf_values, edgecolor="black", **args)
@@ -17,7 +20,10 @@ def plot_pdf_values(ax: plt.Axes, sample_points: np.array, pdf_values: np.array,
         ax.set_xlim(0, None)
 
 
-def plot_pdf_transform(domain, prior, transform_values, posterior, slice_highlights=[], highlight_color="tab:orange", prior_label=None, posterior_label=None, transform_label=None, title=None):
+def plot_pdf_transform(prior: HistogramDistribution, transform_values, posterior: HistogramDistribution, slice_highlights=[], highlight_color="tab:orange", prior_label=None, posterior_label=None, transform_label=None, title=None):
+    if prior.dim > 1 or posterior.dim > 1:
+        raise NotImplementedError("Plotting PDF transform for dimensions > 1 not supported.")
+
     fig, axes = plt.subplots(
         2, 2, figsize=(6, 6),
         sharex="col", sharey="row",
@@ -25,21 +31,37 @@ def plot_pdf_transform(domain, prior, transform_values, posterior, slice_highlig
     )
     axes[1, 0].axis("off")
 
+    input_domain = prior.domain[:,0]
+    output_domain = posterior.domain[:,0]
+
+    input_samples = prior.bin_midpoints[:,0]
+    output_samples = posterior.bin_midpoints[:,0]
+
+    input_values = prior.pdf_values[:]
+    output_values = posterior.pdf_values[:]
+
     # plot PDFs
-    plot_pdf_values(axes[1, 1], domain, prior, label=prior_label, zorder=2)
-    plot_pdf_values(axes[0, 0], domain, posterior, transpose_axis=True, label=posterior_label, zorder=2)
+    plot_pdf_values(axes[1, 1], input_samples, input_values, label=prior_label, zorder=2)
+    plot_pdf_values(axes[0, 0], output_samples, output_values, transpose_axis=True, label=posterior_label, zorder=2)
 
     # plot transform
-    axes[0, 1].plot(domain, transform_values, label=transform_label)
+    axes[0, 1].plot(input_domain, transform_values, label=transform_label)
 
     # set PDF axis limits explicitly so they match
-    pmax = max(np.max(prior), np.max(posterior)) * 1.2
+    pmax = max(
+        np.quantile(input_values, 0.95),
+        np.quantile(output_values, 0.95)
+    ) * 1.2
     axes[0, 0].set_xlim(0, pmax)
     axes[1, 1].set_ylim(0, pmax)
 
+    # EXPERIMENTAL: make output PDF axis log scale
+    # axes[0, 0].set_xscale("functionlog", functions=[lambda x: 1 + 100*x, lambda x: (x - 1)/100])
+    # axes[1, 1].set_yscale("functionlog", functions=[lambda x: 1 + 100*x, lambda x: (x - 1)/100])
+
     # set PDF axis ticks explicitly so they match
-    axes[1, 1].set_xticks(np.linspace(domain[0], domain[-1], 5))
-    axes[0, 0].set_yticks(np.linspace(domain[0], domain[-1], 5))
+    axes[1, 1].set_xticks(np.linspace(input_domain[0], input_domain[-1], 5))
+    axes[0, 0].set_yticks(np.linspace(output_domain[0], output_domain[-1], 5))
 
     # rotate posterior PDF tick labels
     axes[0, 0].tick_params(axis="y", rotation=-90)
@@ -60,12 +82,12 @@ def plot_pdf_transform(domain, prior, transform_values, posterior, slice_highlig
 
     # for given slices of the domain, highlight the preimage and image under the transform
     for x_low, x_high in slice_highlights:
-        domain_step = domain[1] - domain[0]
-        x_low_idx = int((x_low - domain[0]) / domain_step)
-        x_high_idx = int((x_high - domain[0]) / domain_step)
+        domain_step = input_domain[1] - input_domain[0]
+        x_low_idx = int((x_low - input_domain[0]) / domain_step)
+        x_high_idx = int((x_high - input_domain[0]) / domain_step)
 
-        y_low = transform_values[x_low_idx]
-        y_high = transform_values[x_high_idx]
+        y_low = transform_values[x_low_idx, 0]
+        y_high = transform_values[x_high_idx, 0]
 
         axes[1,1].add_artist(ConnectionPatch(
             (x_low, 0), (x_low, y_low),
@@ -99,16 +121,21 @@ def plot_pdf_transform(domain, prior, transform_values, posterior, slice_highlig
             zorder=1
         ))
 
-        mask = (x_low <= domain) & (domain <= x_high)
+
+        mask = (x_low <= input_samples) & (input_samples <= x_high)
         plot_pdf_values(
-            axes[1, 1], domain[mask], prior[mask[:-1]][:-1],
+            axes[1, 1], input_samples[mask], input_values[mask],
             linestyle="--", alpha=0.9, linewidth=0.8, facecolor=highlight_color,
             zorder=2
         )
 
-        mask = (y_low <= domain) & (domain <= y_high)
+        # enforce y_low <= y_high
+        y_low, y_high = min(y_low, y_high), max(y_low, y_high)
+
+        mask = (y_low <= output_samples) & (output_samples <= y_high)
         plot_pdf_values(
-            axes[0, 0], domain[mask], posterior[mask[:-1]][:-1], transpose_axis=True,
+            axes[0, 0], output_samples[mask], output_values[mask],
+            transpose_axis=True,
             linestyle="--", alpha=0.9, linewidth=0.8, facecolor=highlight_color,
             zorder=2
         )
@@ -117,6 +144,8 @@ def plot_pdf_transform(domain, prior, transform_values, posterior, slice_highlig
     axes[0, 0].set_zorder(1)
     axes[0, 1].set_zorder(0)
     axes[1, 1].set_zorder(1)
+
+    return axes
 
 import matplotlib.patches
 import matplotlib.transforms
