@@ -357,4 +357,56 @@ def random_smooth_function(input_space_limits, output_space_limits, axis_steps=5
 #     control_space_axis = []
 #     for i in range(control_dim):
 #         control_space_axis.append(jnp.linspace(*control_space_limits[i], control_space_steps[i]))
+
+
+############################### Mackey-Glass ###############################
+#                                                                                                #
+#    - state:   [P]                     #
+#    - control: [cart_accel]                                                                     #
+#    - dynamics: f(x, u) =                           #
+#    - measurement: h(x) = [cart, theta_1] + noises                                              #
+#                                                                                                #
+#    See:    #
+#                                                                                                #
+##################################################################################################
+
+def generate_mackey_glass_system(dt = 0.01):
+    gamma = 0.1
+    beta = 0.2
+    n = 10
+    tau = 6
+    theta = np.pi
+
+    def dynamics_func(x, u, w):
+        P = x.flatten()
+        time = u.flatten()
+
+        return jnp.array([
+            [(beta*jnp.power(theta,n)*P*(time-tau)) / (jnp.power(theta,n)+P*jnp.power(time-tau,n)) - gamma*P]
+        ])
+
+    def measurement_func(x, v):
+        P = x.flatten()
+        noise = 0.0
+        return jnp.array([
+            [P + noise]
+        ])
+
+    # dynamics noise covariance
+    P_covariance = 0.001
+
+    R = jnp.array([
+        [P_covariance]
+    ])
+
+    # measurement noise covariance
+    measurement_variance = 0.01
+    Q = jnp.array([
+        [measurement_variance]
+    ])
+
+    mackey_glass_nonlinear = AutoDiffSystemModel(1, 1, 1, dynamics_func, measurement_func, R, Q)
+    mackey_glass_nonlinear.delta_t = dt
+
+    return mackey_glass_nonlinear
     
