@@ -370,26 +370,74 @@ def random_smooth_function(input_space_limits, output_space_limits, axis_steps=5
 #                                                                                                #
 ##################################################################################################
 
-def generate_mackey_glass_system(dt = 0.01):
+def generate_mackey_glass_system(dt = 1, tau = 6):
     gamma = 0.1
     beta = 0.2
     n = 10
-    tau = 6
-    theta = np.pi
+    theta = np.pi/2
 
     def dynamics_func(x, u, w):
-        P = x.flatten()
+        values = x[0:21]
+        #print(values.shape)
+        Pnow, P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13, P14, P15, P16, P17, P18, P19, P20 = values
         time = u.flatten()
 
-        return x + dt * jnp.array([
-            [(beta*jnp.power(theta,n)*P*(time-tau)) / (jnp.power(theta,n)+P*jnp.power(time-tau,n)) - gamma*P]
+
+        nextState = jnp.array([
+            [Pnow + dt*((beta*jnp.power(theta,n)*P20) / (jnp.power(theta,n)+jnp.power(P20,n)) - gamma*Pnow)],
+            [P1],
+            [P2],
+            [P3],
+            [P4],
+            [P5],
+            [P6],
+            [P7],
+            [P8],
+            [P9],
+            [P10],
+            [P11],
+            [P12],
+            [P13],
+            [P14],
+            [P15],
+            [P16],
+            [P17],
+            [P18],
+            [P19],
+            [P20],
         ])
 
+        nextState = nextState.reshape((21,))
+        #print(nextState)
+        return nextState
+
     def measurement_func(x, v):
-        P = x.flatten()
+        values = x[0:21]
+        Pnow, P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13, P14, P15, P16, P17, P18, P19, P20 = values
+        #print(x)
         noise = 0.0
         return jnp.array([
-            [P + noise]
+            [Pnow],
+            [P1],
+            [P2],
+            [P3],
+            [P4],
+            [P5],
+            [P6],
+            [P7],
+            [P8],
+            [P9],
+            [P10],
+            [P11],
+            [P12],
+            [P13],
+            [P14],
+            [P15],
+            [P16],
+            [P17],
+            [P18],
+            [P19],
+            [P20],
         ])
 
     # dynamics noise covariance
