@@ -381,7 +381,7 @@ def generate_mackey_glass_system(dt = 0.01):
         P = x.flatten()
         time = u.flatten()
 
-        return jnp.array([
+        return x + dt * jnp.array([
             [(beta*jnp.power(theta,n)*P*(time-tau)) / (jnp.power(theta,n)+P*jnp.power(time-tau,n)) - gamma*P]
         ])
 
