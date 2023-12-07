@@ -376,6 +376,7 @@ def generate_mackey_glass_system(dt = 1, tau = 6):
     n = 10
     theta = np.pi/2
 
+    @jax.jit
     def dynamics_func(x, u, w):
         x = x.reshape((21,))
         values = x[0:21]
@@ -384,80 +385,74 @@ def generate_mackey_glass_system(dt = 1, tau = 6):
 
 
         nextState = jnp.array([
-            [noise + Pnow + dt*((beta*jnp.power(theta,n)*P20) / (jnp.power(theta,n)+jnp.power(P20,n)) - gamma*Pnow)],
-            [noise + P1],
-            [noise + P2],
-            [noise + P3],
-            [noise + P4],
-            [noise + P5],
-            [noise + P6],
-            [noise + P7],
-            [noise + P8],
-            [noise + P9],
-            [noise + P10],
-            [noise + P11],
-            [noise + P12],
-            [noise + P13],
-            [noise + P14],
-            [noise + P15],
-            [noise + P16],
-            [noise + P17],
-            [noise + P18],
-            [noise + P19],
-            [noise + P20],
+            [noise + x[0] + dt*((beta*jnp.power(theta,n)*x[20]) / (jnp.power(theta,n)+jnp.power(x[20],n)) - gamma*x[0])],
+            [noise + x[1]],
+            [noise + x[2]],
+            [noise + x[3]],
+            [noise + x[4]],
+            [noise + x[5]],
+            [noise + x[6]],
+            [noise + x[7]],
+            [noise + x[8]],
+            [noise + x[9]],
+            [noise + x[10]],
+            [noise + x[11]],
+            [noise + x[12]],
+            [noise + x[13]],
+            [noise + x[14]],
+            [noise + x[15]],
+            [noise + x[16]],
+            [noise + x[17]],
+            [noise + x[18]],
+            [noise + x[19]],
+            [noise + x[20]],
         ])
 
         nextState = nextState.reshape((21,1))
         #print(nextState.shape)
         return nextState
 
+    @jax.jit
     def measurement_func(x, v):
-        #x = x.reshape((21,))
-        #print(x.shape)
         values = x[0:21]
         Pnow, P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13, P14, P15, P16, P17, P18, P19, P20 = values
         #print(x)
         noise = 0
         measurement = jnp.array([
-            [noise + Pnow],
-            [noise + P1],
-            [noise + P2],
-            [noise + P3],
-            [noise + P4],
-            [noise + P5],
-            [noise + P6],
-            [noise + P7],
-            [noise + P8],
-            [noise + P9],
-            [noise + P10],
-            [noise + P11],
-            [noise + P12],
-            [noise + P13],
-            [noise + P14],
-            [noise + P15],
-            [noise + P16],
-            [noise + P17],
-            [noise + P18],
-            [noise + P19],
-            [noise + P20],
+            [noise + x[0]],
+            [noise + x[1]],
+            [noise + x[2]],
+            [noise + x[3]],
+            [noise + x[4]],
+            [noise + x[5]],
+            [noise + x[6]],
+            [noise + x[7]],
+            [noise + x[8]],
+            [noise + x[9]],
+            [noise + x[10]],
+            [noise + x[11]],
+            [noise + x[12]],
+            [noise + x[13]],
+            [noise + x[14]],
+            [noise + x[15]],
+            [noise + x[16]],
+            [noise + x[17]],
+            [noise + x[18]],
+            [noise + x[19]],
+            [noise + x[20]],
         ])
         
         measurement = measurement.reshape((21,1))
-        #print(measurement.shape)
         return measurement
 
     # dynamics noise covariance
-    P_covariance = 0.01
+    P_covariance = 0.001
 
-    R = jnp.array([
-        [P_covariance]
-    ])
+    R = np.diag([P_covariance])
 
     # measurement noise covariance
-    measurement_variance = 0.01
-    Q = jnp.array([
-        [measurement_variance]
-    ])
+    measurement_variance = 0.001
+    Q = np.diag([measurement_variance])
 
     mackey_glass_nonlinear = AutoDiffSystemModel(21, 1, 21, dynamics_func, measurement_func, R, Q)
     mackey_glass_nonlinear.delta_t = dt
