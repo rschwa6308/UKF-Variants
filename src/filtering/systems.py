@@ -61,6 +61,8 @@ class SystemModel:
         if v is None:
             v = self.measurement_noise_func()
         
+        #print(self.measurement_func(x, v).shape)
+
         return self.measurement_func(x, v)
     
 
