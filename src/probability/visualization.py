@@ -7,25 +7,25 @@ from probability.distributions import HistogramDistribution
 # from helpers import query_pdf
 
 
-def plot_pdf_values(ax: plt.Axes, sample_points: np.array, pdf_values: np.array, transpose_axis=False, **args):
+def plot_pdf_values(ax: plt.Axes, sample_points: np.array, pdf_values: np.array, transpose_axis=False, edgecolor="black", **kwargs):
     "Plot a PDF evaluated at sample points"
     assert(sample_points.shape == pdf_values.shape)
 
     if not transpose_axis:
-        ax.fill_between(sample_points, pdf_values, edgecolor="black", **args)
+        ax.fill_between(sample_points, pdf_values, edgecolor=edgecolor, **kwargs)
         ax.set_ylim(0, None)
 
     else:
-        ax.fill_betweenx(sample_points, pdf_values,edgecolor="black", **args)
+        ax.fill_betweenx(sample_points, pdf_values,edgecolor=edgecolor, **kwargs)
         ax.set_xlim(0, None)
 
 
-def plot_pdf_transform(prior: HistogramDistribution, transform_values, posterior: HistogramDistribution, slice_highlights=[], highlight_color="tab:orange", prior_label=None, posterior_label=None, transform_label=None, title=None):
+def plot_pdf_transform(prior: HistogramDistribution, transform_values, posterior: HistogramDistribution, slice_highlights=[], highlight_color="tab:orange", prior_label=None, posterior_label=None, transform_label=None, title=None, figsize=(6, 6)):
     if prior.dim > 1 or posterior.dim > 1:
         raise NotImplementedError("Plotting PDF transform for dimensions > 1 not supported.")
 
     fig, axes = plt.subplots(
-        2, 2, figsize=(6, 6),
+        2, 2, figsize=figsize,
         sharex="col", sharey="row",
         constrained_layout=True
     )
@@ -67,8 +67,8 @@ def plot_pdf_transform(prior: HistogramDistribution, transform_values, posterior
     axes[0, 0].tick_params(axis="y", rotation=-90)
 
     # add subplot captions
-    axes[1, 1].set_xlabel("prior")
-    axes[0, 0].set_ylabel("posterior", rotation=-90, va="top")
+    axes[1, 1].set_xlabel(r"$\mathrm{bel}(x_t)$")
+    axes[0, 0].set_ylabel(r"$\mathrm{bel}(x_{t+1})$", rotation=-90, va="top")
 
     # optional: set figure title
     if title is not None:

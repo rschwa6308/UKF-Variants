@@ -83,12 +83,11 @@ class MultiShellSigmaPointSelector(SigmaPointSelector):
         sigma_points.append(mean)
 
         for alpha in self.alphas:
-            lam = (alpha**2 - 1) * n
-            shell_scale = np.sqrt(n + lam)
+            shell_scale = np.sqrt(n) * alpha
 
             # add weight to center point
-            weights_mean[0] += lam / (n + lam)
-            weights_cov[0] += lam / (n + lam) + (1 - alpha**2 + self.beta)
+            weights_mean[0] += 1 - 1/alpha**2
+            weights_cov[0] += 1 - 1/alpha**2 + (1 - alpha**2 + self.beta)
 
             # include 2n points in a single shell around the mean
             for i in range(n):
@@ -97,11 +96,11 @@ class MultiShellSigmaPointSelector(SigmaPointSelector):
                 sigma_points.append(mean + vec)
                 sigma_points.append(mean - vec)
 
-                weights_mean.append(1 / (2*(n + lam)))
-                weights_mean.append(1 / (2*(n + lam)))
+                weights_mean.append(1 / (2*n*alpha**2))
+                weights_mean.append(1 / (2*n*alpha**2))
 
-                weights_cov.append(1 / (2*(n + lam)))
-                weights_cov.append(1 / (2*(n + lam)))
+                weights_cov.append(1 / (2*n*alpha**2))
+                weights_cov.append(1 / (2*n*alpha**2))
 
         sigma_points = np.hstack(sigma_points)
         weights_mean = np.array(weights_mean)
