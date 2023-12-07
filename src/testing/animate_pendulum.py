@@ -5,6 +5,7 @@ from matplotlib import animation
 import matplotlib.patheffects as pe
 from matplotlib.patches import Arrow
 
+import sys; sys.path.append("..")
 from helpers import vec
 
 

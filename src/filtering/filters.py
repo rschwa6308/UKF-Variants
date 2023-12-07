@@ -173,8 +173,8 @@ class UnscentedKalmanFilter(GaussianBeliefFilter):
 
         def augmented_measurement_model(point):
             x, v = np.split(point, [self.system.state_dim])     # un-augment
-            x_prime = self.system.query_measurement_model(x, v)
-            return x_prime
+            z_hat = self.system.query_measurement_model(x, v)
+            return z_hat
 
         z_hat, cov_zz, cov_xz = unscented_transform(augmented_measurement_model, augmented_mean, augmented_cov, self.sigma_point_selector)
 

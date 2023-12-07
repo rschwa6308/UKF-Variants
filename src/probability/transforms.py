@@ -19,7 +19,7 @@ and returns
 from probability.sigma_points import SigmaPointSelector
 
 
-def unscented_transform(func: Callable, mean_x, cov_xx, sigma_point_selector: SigmaPointSelector) -> Tuple:
+def unscented_transform(func: Callable, mean_x, cov_xx, sigma_point_selector: SigmaPointSelector, return_sigma_points=False) -> Tuple:
     """
     Given a function f(X) = Y together with the mean and covariance on X,
     apply the unscented transform to obtain the mean on Y, the covariance on Y, and the cross-covariance on X and Y
@@ -42,7 +42,10 @@ def unscented_transform(func: Callable, mean_x, cov_xx, sigma_point_selector: Si
     cov_yy = weights_cov * (sigma_points_transformed - mean_y) @ (sigma_points_transformed - mean_y).T
     cov_xy = weights_cov * (sigma_points - mean_x) @ (sigma_points_transformed - mean_y).T
 
-    return mean_y, cov_yy, cov_xy
+    if return_sigma_points:
+        return mean_y, cov_yy, cov_xy, sigma_points, sigma_points_transformed
+    else:
+        return mean_y, cov_yy, cov_xy
 
 
 
@@ -107,6 +110,9 @@ def histogram_transform(func: Callable, pdf: HistogramDistribution, output_pdf: 
 
         # volume of mass destination
         image_volume = image[1] - image[0]
+        if image_volume == 0:
+            print("WARNING: func is not locally invertible at current discretization! Some mass will be lost...")
+            continue
 
         # identify the indices of the bins corresponding to the image
         image_bins = (
@@ -148,8 +154,10 @@ def histogram_transform(func: Callable, pdf: HistogramDistribution, output_pdf: 
 
             # deliver mass
             output_pdf.pmf_values[bin] += mass * mass_fraction
-
-    assert(np.isclose(np.sum(output_pdf.pmf_values), 1.0))
+    
+    total_prob = np.sum(output_pdf.pmf_values)
+    if not np.isclose(total_prob, 1.0, rtol=1e-4):
+        print(f"WARNING: some mass was lost/gained during transform. (np.sum(output_pdf.pmf_values) == {total_prob:0.5f})")
 
     return output_pdf
 
