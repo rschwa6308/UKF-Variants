@@ -5,6 +5,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from helpers import lerp, cartesian_product, format_matrix
 # from probability.visualization import plot_covariance_ellipse, plot_pdf_values
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 

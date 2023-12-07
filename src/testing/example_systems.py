@@ -357,4 +357,110 @@ def random_smooth_function(input_space_limits, output_space_limits, axis_steps=5
 #     control_space_axis = []
 #     for i in range(control_dim):
 #         control_space_axis.append(jnp.linspace(*control_space_limits[i], control_space_steps[i]))
+
+
+############################### Mackey-Glass ###############################
+#                                                                                                #
+#    - state:   [P]                     #
+#    - control: [cart_accel]                                                                     #
+#    - dynamics: f(x, u) =                           #
+#    - measurement: h(x) = [cart, theta_1] + noises                                              #
+#                                                                                                #
+#    See:    #
+#                                                                                                #
+##################################################################################################
+
+def generate_mackey_glass_system(dt = 1, tau = 6):
+    gamma = 0.1
+    beta = 0.2
+    n = 10
+    theta = np.pi/2
+
+    def dynamics_func(x, u, w):
+        x = x.reshape((21,))
+        values = x[0:21]
+        Pnow, P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13, P14, P15, P16, P17, P18, P19, P20 = values
+        noise = w.flatten()
+
+
+        nextState = jnp.array([
+            [noise + Pnow + dt*((beta*jnp.power(theta,n)*P20) / (jnp.power(theta,n)+jnp.power(P20,n)) - gamma*Pnow)],
+            [noise + P1],
+            [noise + P2],
+            [noise + P3],
+            [noise + P4],
+            [noise + P5],
+            [noise + P6],
+            [noise + P7],
+            [noise + P8],
+            [noise + P9],
+            [noise + P10],
+            [noise + P11],
+            [noise + P12],
+            [noise + P13],
+            [noise + P14],
+            [noise + P15],
+            [noise + P16],
+            [noise + P17],
+            [noise + P18],
+            [noise + P19],
+            [noise + P20],
+        ])
+
+        nextState = nextState.reshape((21,1))
+        #print(nextState.shape)
+        return nextState
+
+    def measurement_func(x, v):
+        #x = x.reshape((21,))
+        #print(x.shape)
+        values = x[0:21]
+        Pnow, P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13, P14, P15, P16, P17, P18, P19, P20 = values
+        #print(x)
+        noise = 0
+        measurement = jnp.array([
+            [noise + Pnow],
+            [noise + P1],
+            [noise + P2],
+            [noise + P3],
+            [noise + P4],
+            [noise + P5],
+            [noise + P6],
+            [noise + P7],
+            [noise + P8],
+            [noise + P9],
+            [noise + P10],
+            [noise + P11],
+            [noise + P12],
+            [noise + P13],
+            [noise + P14],
+            [noise + P15],
+            [noise + P16],
+            [noise + P17],
+            [noise + P18],
+            [noise + P19],
+            [noise + P20],
+        ])
+        
+        measurement = measurement.reshape((21,1))
+        #print(measurement.shape)
+        return measurement
+
+    # dynamics noise covariance
+    P_covariance = 0.01
+
+    R = jnp.array([
+        [P_covariance]
+    ])
+
+    # measurement noise covariance
+    measurement_variance = 0.01
+    Q = jnp.array([
+        [measurement_variance]
+    ])
+
+    mackey_glass_nonlinear = AutoDiffSystemModel(21, 1, 21, dynamics_func, measurement_func, R, Q)
+    mackey_glass_nonlinear.delta_t = dt
+
+    return mackey_glass_nonlinear
     
