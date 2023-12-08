@@ -362,9 +362,9 @@ def random_smooth_function(input_space_limits, output_space_limits, axis_steps=5
 ############################### Mackey-Glass ###############################
 #                                                                                                #
 #    - state:   [P]                     #
-#    - control: [cart_accel]                                                                     #
+#    - control: []                                                                     #
 #    - dynamics: f(x, u) =                           #
-#    - measurement: h(x) = [cart, theta_1] + noises                                              #
+#    - measurement: h(x) = [P] + noises                                              #
 #                                                                                                #
 #    See:    #
 #                                                                                                #
@@ -446,7 +446,7 @@ def generate_mackey_glass_system(dt = 1, tau = 6):
         return measurement
 
     # dynamics noise covariance
-    P_cov = 0.01
+    P_cov = 0.1
     R = np.diag([P_cov, P_cov, P_cov, P_cov, P_cov, P_cov, P_cov,
                  P_cov, P_cov, P_cov, P_cov, P_cov, P_cov, P_cov,
                  P_cov, P_cov, P_cov, P_cov, P_cov, P_cov, P_cov])
