@@ -134,7 +134,6 @@ class ExtendedKalmanFilter(GaussianBeliefFilter):
 
         C, M = self.system.query_measurement_jacobian(self.mean, v_mean)
 
-
         # compute Kalman gain
         K = self.covariance @ C.T @ np.linalg.inv(C @ self.covariance @ C.T + M @ self.system.measurement_noise_cov @ M.T)
         

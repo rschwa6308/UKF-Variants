@@ -385,27 +385,27 @@ def generate_mackey_glass_system(dt = 1, tau = 6):
 
 
         nextState = jnp.array([
-            [noise + x[0] + dt*((beta*jnp.power(theta,n)*x[20]) / (jnp.power(theta,n)+jnp.power(x[20],n)) - gamma*x[0])],
-            [noise + x[1]],
-            [noise + x[2]],
-            [noise + x[3]],
-            [noise + x[4]],
-            [noise + x[5]],
-            [noise + x[6]],
-            [noise + x[7]],
-            [noise + x[8]],
-            [noise + x[9]],
-            [noise + x[10]],
-            [noise + x[11]],
-            [noise + x[12]],
-            [noise + x[13]],
-            [noise + x[14]],
-            [noise + x[15]],
-            [noise + x[16]],
-            [noise + x[17]],
-            [noise + x[18]],
-            [noise + x[19]],
-            [noise + x[20]],
+            [noise[0] + x[0] + dt*((beta*jnp.power(theta,n)*x[20]) / (jnp.power(theta,n)+jnp.power(x[20],n)) - gamma*x[0])],
+            [noise[1] + x[1]],
+            [noise[2] + x[2]],
+            [noise[3] + x[3]],
+            [noise[4] + x[4]],
+            [noise[5] + x[5]],
+            [noise[6] + x[6]],
+            [noise[7] + x[7]],
+            [noise[8] + x[8]],
+            [noise[9] + x[9]],
+            [noise[10] + x[10]],
+            [noise[11] + x[11]],
+            [noise[12] + x[12]],
+            [noise[13] + x[13]],
+            [noise[14] + x[14]],
+            [noise[15] + x[15]],
+            [noise[16] + x[16]],
+            [noise[17] + x[17]],
+            [noise[18] + x[18]],
+            [noise[19] + x[19]],
+            [noise[20] + x[20]]
         ])
 
         nextState = nextState.reshape((21,1))
@@ -417,42 +417,45 @@ def generate_mackey_glass_system(dt = 1, tau = 6):
         values = x[0:21]
         Pnow, P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13, P14, P15, P16, P17, P18, P19, P20 = values
         #print(x)
-        noise = 0
+        noise = v.flatten()
         measurement = jnp.array([
-            [noise + x[0]],
-            [noise + x[1]],
-            [noise + x[2]],
-            [noise + x[3]],
-            [noise + x[4]],
-            [noise + x[5]],
-            [noise + x[6]],
-            [noise + x[7]],
-            [noise + x[8]],
-            [noise + x[9]],
-            [noise + x[10]],
-            [noise + x[11]],
-            [noise + x[12]],
-            [noise + x[13]],
-            [noise + x[14]],
-            [noise + x[15]],
-            [noise + x[16]],
-            [noise + x[17]],
-            [noise + x[18]],
-            [noise + x[19]],
-            [noise + x[20]],
+            [noise[0] + x[0]],
+            [noise[1] + x[1]],
+            [noise[2] + x[2]],
+            [noise[3] + x[3]],
+            [noise[4] + x[4]],
+            [noise[5] + x[5]],
+            [noise[6] + x[6]],
+            [noise[7] + x[7]],
+            [noise[8] + x[8]],
+            [noise[9] + x[9]],
+            [noise[10] + x[10]],
+            [noise[11] + x[11]],
+            [noise[12] + x[12]],
+            [noise[13] + x[13]],
+            [noise[14] + x[14]],
+            [noise[15] + x[15]],
+            [noise[16] + x[16]],
+            [noise[17] + x[17]],
+            [noise[18] + x[18]],
+            [noise[19] + x[19]],
+            [noise[20] + x[20]]
         ])
         
         measurement = measurement.reshape((21,1))
         return measurement
 
     # dynamics noise covariance
-    P_covariance = 0.001
-
-    R = np.diag([P_covariance])
+    P_cov = 0.01
+    R = np.diag([P_cov, P_cov, P_cov, P_cov, P_cov, P_cov, P_cov,
+                 P_cov, P_cov, P_cov, P_cov, P_cov, P_cov, P_cov,
+                 P_cov, P_cov, P_cov, P_cov, P_cov, P_cov, P_cov])
 
     # measurement noise covariance
-    measurement_variance = 0.001
-    Q = np.diag([measurement_variance])
+    mes_cov = 0.1
+    Q = np.diag([mes_cov, mes_cov, mes_cov, mes_cov, mes_cov, mes_cov, mes_cov,
+                 mes_cov, mes_cov, mes_cov, mes_cov, mes_cov, mes_cov, mes_cov,
+                 mes_cov, mes_cov, mes_cov, mes_cov, mes_cov, mes_cov, mes_cov])
 
     mackey_glass_nonlinear = AutoDiffSystemModel(21, 1, 21, dynamics_func, measurement_func, R, Q)
     mackey_glass_nonlinear.delta_t = dt
