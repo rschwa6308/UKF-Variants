@@ -362,9 +362,9 @@ def random_smooth_function(input_space_limits, output_space_limits, axis_steps=5
 ############################### Mackey-Glass ###############################
 #                                                                                                #
 #    - state:   [P]                     #
-#    - control: [cart_accel]                                                                     #
+#    - control: []                                                                     #
 #    - dynamics: f(x, u) =                           #
-#    - measurement: h(x) = [cart, theta_1] + noises                                              #
+#    - measurement: h(x) = [P] + noises                                              #
 #                                                                                                #
 #    See:    #
 #                                                                                                #
@@ -376,6 +376,7 @@ def generate_mackey_glass_system(tau, dt=1.0):
     n = 10
     theta = np.pi/2
 
+    @jax.jit
     def dynamics_func(x, u, w):
         sequence_next = x[0] + dt*((beta*jnp.power(theta,n)*x[tau]) / (jnp.power(theta,n) + jnp.power(x[tau],n)) - gamma*x[0])
         sequence_next += w
@@ -383,6 +384,7 @@ def generate_mackey_glass_system(tau, dt=1.0):
         x_next = jnp.vstack([sequence_next, *x[:-1]])
         return x_next
 
+    @jax.jit
     def measurement_func(x, v):
         return x[0] + v
 

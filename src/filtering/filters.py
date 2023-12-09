@@ -111,13 +111,11 @@ class ExtendedKalmanFilter(GaussianBeliefFilter):
         # linearize dynamics model
         w_mean = np.zeros((self.system.dynamics_noise_dim, 1))
         A, B, L = self.system.query_dynamics_jacobian(self.mean, u, w_mean)
-        #print(A @ self.covariance @ A.T)
 
         # Kalman predict step
-        #print(self.mean.shape)
         self.mean = self.system.query_dynamics_model(self.mean, u)
         self.covariance = A @ self.covariance @ A.T + L @ self.system.dynamics_noise_cov @ L.T
-        #print(self.mean.shape)
+ 
 
     def update_step(self, z):
         """
@@ -133,23 +131,14 @@ class ExtendedKalmanFilter(GaussianBeliefFilter):
         """
         # linearize measurement model
         v_mean = np.zeros((self.system.measurement_noise_dim, 1))
-        #print(self.system.measurement_noise_dim)
+
         C, M = self.system.query_measurement_jacobian(self.mean, v_mean)
-        #print(C)
-        #print(M)
-        ##print(C @ self.covariance @ C.T)
-        #print(self.system.measurement_noise_cov)
-        #print(M)
 
         # compute Kalman gain
         K = self.covariance @ C.T @ np.linalg.inv(C @ self.covariance @ C.T + M @ self.system.measurement_noise_cov @ M.T)
-
-        # Kalman update state
-        #print(self.mean.shape)
         
         self.mean += K @ (z - self.system.query_measurement_model(self.mean))
-        #print(z.shape)
-        #print(self.system.query_measurement_model(self.mean).shape)
+ 
         self.covariance -= K @ C @ self.covariance
 
     

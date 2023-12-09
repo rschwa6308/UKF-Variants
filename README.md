@@ -1,14 +1,10 @@
-# 16-833 SLAM Final Project: Unscented Kalman Filter Variants
+# Variants of The Unscented Kalman Filter for Highly Non-Linear State Estimation
+Final project for CMU 16-833: SLAM
 
 Russell Schwartz and Ian Krause
 
-Overleaf: https://www.overleaf.com/project/65368bca0723746d02e80c05
+**Project Structure**
 
-## Deadlines
- - Project Proposal: Oct 24
- - Midterm Update: Nov 10
- - Presentation: Dec 4
- - Final Report: Dec 13
-
-## TODOs
- - change repo name once project idea is finalized
+ - `src/filters`: system model framework and filter implementations
+ - `src/probability`: probability utils, including genric unscented transform
+ - `src/testing`: example system implementations and testing notebooks
