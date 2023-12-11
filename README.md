@@ -3,6 +3,11 @@ Final project for CMU 16-833: SLAM
 
 Russell Schwartz and Ian Krause
 
+![modified unscented transform](figures/uncertainty_propagation/UKF2_uncertainty_propagation.png)
+![modified sigma point selection (2D)](figures/uncertainty_propagation/UKF2_uncertainty_propagation.png)
+
+
+
 **Project Structure**
 
  - `src/filters`: system model framework and filter implementations
