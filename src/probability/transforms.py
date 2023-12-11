@@ -49,29 +49,9 @@ def unscented_transform(func: Callable, mean_x, cov_xx, sigma_point_selector: Si
 
 
 
-
-def add_mass_to_pdf_in_interval(domain, pdf, low, high, mass):
-    # assert(high > low)
-
-    # convert to index space
-    # domain_step = (domain[-1] - domain[0]) / (len(domain) - 1)
-    domain_step = domain[1] - domain[0]
-    low_idx = (low - domain[0]) / domain_step
-    high_idx = (high - domain[0]) / domain_step
-
-    width = high_idx - low_idx
-    
-    if width == 0:
-        pdf[int(low_idx)] += mass
-        return
-    
-    for x in range(int(np.floor(low_idx)), int(np.ceil(high_idx))):
-        overlap = interval_overlap((x, x+1), (low_idx, high_idx))
-        pdf[x] += mass * overlap / width
-
-
-
 def histogram_transform(func: Callable, pdf: HistogramDistribution, output_pdf: Optional[HistogramDistribution] = None):
+    "Explicit mass-transport transform from one HistogramDistribution to another"
+
     if pdf.dim > 1:
         raise NotImplementedError("Histogram transform for dim > 1 not yet supported.")
 

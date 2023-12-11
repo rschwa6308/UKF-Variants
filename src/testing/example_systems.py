@@ -359,16 +359,15 @@ def random_smooth_function(input_space_limits, output_space_limits, axis_steps=5
 #         control_space_axis.append(jnp.linspace(*control_space_limits[i], control_space_steps[i]))
 
 
-############################### Mackey-Glass ###############################
-#                                                                                                #
-#    - state:   [P]                     #
-#    - control: []                                                                     #
-#    - dynamics: f(x, u) =                           #
-#    - measurement: h(x) = [P] + noises                                              #
-#                                                                                                #
-#    See:    #
-#                                                                                                #
-##################################################################################################
+
+######################## Mackey-Glass ########################
+#                                                            #
+#    - state:   [P_t, P_{t-1}, ..., P_{t-tau}]               #
+#    - control: []                                           #
+#    - dynamics: f(x, u) = solve MG ODE, shift state         #
+#    - measurement: h(x) = P_t + noise                       #
+#                                                            #
+##############################################################
 
 def generate_mackey_glass_system(tau, dt=1.0):
     gamma = 0.1
